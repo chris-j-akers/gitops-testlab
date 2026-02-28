@@ -29,6 +29,15 @@ spec:
         volumeMounts:
         - name: artifactory-storage
           mountPath: /var/opt/jfrog/artifactory
+        env:
+        - name: JF_SHARED_DATABASE_TYPE
+          value: "postgresql"
+        - name: JF_SHARED_DATABASE_URL
+          value: "jdbc:postgresql://postgres:5432/artifactory"
+        - name: JF_SHARED_DATABASE_USERNAME
+          value: "artifactory"
+        - name: JF_SHARED_DATABASE_PASSWORD
+          value: "password"              
       restartPolicy: Always
   volumeClaimTemplates:
   - metadata:
@@ -39,3 +48,4 @@ spec:
         requests:
           storage: 10Gi
       volumeName: artifactory-pv   # Bind explicitly to hostPath PV
+  

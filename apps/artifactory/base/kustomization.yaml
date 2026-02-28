@@ -2,7 +2,9 @@ metadata:
   namespace: artifactory
 resources:
   - namespace.yaml
-  - pv-pvc.yaml
+  - pv-artifactory.yaml
   - statefulset.yaml
   - service.yaml
+  - postgres.yaml
+  
 
