@@ -31,4 +31,5 @@ spec:
       accessModes: ["ReadWriteOnce"]
       resources:
         requests:
-          storage: 5Gi
+          storage: 10Gi
+      volumeName: artifactory-pv   # Bind explicitly to hostPath PV

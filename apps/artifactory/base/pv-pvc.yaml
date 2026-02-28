@@ -2,14 +2,21 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: artifactory-pv
-  namespace: artifactory
 spec:
   capacity:
     storage: 10Gi
   accessModes:
     - ReadWriteOnce
   hostPath:
-    path: /mnt/artifactory_data
+    path: /mnt/artifactory_data   # Make sure this folder exists on the node
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - cakers-worker-1  # Node where the path exists
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -21,4 +28,4 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 10Gi
