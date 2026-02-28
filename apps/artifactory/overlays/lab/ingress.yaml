@@ -2,6 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: artifactory-ingress
+  namespace: artifactory
 spec:
   rules:
   - host: artifactory.lab.local
