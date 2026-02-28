@@ -18,16 +18,3 @@ spec:
               operator: In
               values:
                 - cakers-worker-1.lab.local
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: artifactory-storage-artifactory-0
-  namespace: artifactory  
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: ""
