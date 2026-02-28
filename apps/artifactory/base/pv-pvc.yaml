@@ -8,7 +8,8 @@ spec:
   accessModes:
     - ReadWriteOnce
   hostPath:
-    path: /mnt/artifactory_data   # Make sure this folder exists on the node
+    path: /mnt/artifactory_data
+  storageClassName: ""
   nodeAffinity:
     required:
       nodeSelectorTerms:
@@ -16,12 +17,12 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - cakers-worker-1  # Node where the path exists
+                - cakers-worker-1
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: artifactory-pvc
+  name: artifactory-storage-artifactory-0
   namespace: artifactory  
 spec:
   accessModes:
@@ -29,3 +30,4 @@ spec:
   resources:
     requests:
       storage: 10Gi
+  storageClassName: ""
