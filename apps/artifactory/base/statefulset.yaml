@@ -14,6 +14,8 @@ spec:
       labels:
         app: artifactory
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: cakers-worker-1.lab.local    
       containers:
       - name: artifactory
         image: docker.bintray.io/jfrog/artifactory-oss:latest
