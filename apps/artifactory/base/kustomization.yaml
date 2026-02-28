@@ -1,6 +1,8 @@
 metadata:
   namespace: artifactory
 resources:
+  - namespace.yaml
   - pv-pvc.yaml
   - statefulset.yaml
   - service.yaml
+
