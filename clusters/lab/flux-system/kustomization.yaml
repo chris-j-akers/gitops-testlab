@@ -3,4 +3,4 @@ kind: Kustomization
 resources:
 - gotk-components.yaml
 - gotk-sync.yaml
-- ../../../../apps/artifactory/overlays/lab
+- ../../../apps/artifactory/overlays/lab
