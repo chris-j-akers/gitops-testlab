@@ -2,6 +2,5 @@ metadata:
   namespace: artifactory
 resources:
   - ../../base
-  - ingress.yaml
 
 
