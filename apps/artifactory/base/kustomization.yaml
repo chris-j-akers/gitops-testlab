@@ -8,6 +8,7 @@ resources:
   - artifactory/artifactory-pv.yaml
   - artifactory/artifactory-service.yaml
   - artifactory/artifactory-statefulset.yaml
+  - artifactory/artifactory-ingress.yaml
   - postgres/postgres-pv.yaml
   - postgres/postgres-service.yaml
   - postgres/postgres-statefulset.yaml
