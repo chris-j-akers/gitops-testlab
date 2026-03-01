@@ -41,7 +41,9 @@ spec:
         - name: JF_SHARED_DATABASE_PASSWORD
           value: "password"              
         - name: ARTIFACTORY_JAVA_OPTIONS
-          value: "-Xms512m -Xmx1024m -Djava.security.egd=file:/dev/./urandom"          
+          value: "-Xms512m -Xmx1024m -Djava.security.egd=file:/dev/./urandom"
+        - name: ARTIFACTORY_HOME
+        - value: /opt/jfrog/artifactory
       restartPolicy: Always
   volumeClaimTemplates:
   - metadata:
