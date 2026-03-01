@@ -1,9 +1,13 @@
-metadata:
-  namespace: artifactory
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: artifactory
+
 resources:
   - namespace.yaml
-  - artifactory-statefulset.yaml
-  - artifactory-service.yaml
-  - artifactory-pv.yaml
-
-
+  - artifactory/artifactory-pv.yaml
+  - artifactory/artifactory-service.yaml
+  - artifactory/artifactory-statefulset.yaml
+  - postgres/postgres-pv.yaml
+  - postgres/postgres-service.yaml
+  - postgres/postgres-statefulset.yaml
