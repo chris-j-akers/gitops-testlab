@@ -34,6 +34,8 @@ spec:
           value: "postgresql"
         - name: JF_SHARED_DATABASE_URL
           value: "jdbc:postgresql://postgres:5432/artifactory"
+        - name: JF_SHARED_DATABASE_DRIVER
+          value: org.postgresql.Driver          
         - name: JF_SHARED_DATABASE_USERNAME
           value: "artifactory"
         - name: JF_SHARED_DATABASE_PASSWORD
