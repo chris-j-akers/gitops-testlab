@@ -5,5 +5,5 @@ resources:
   - artifactory-statefulset.yaml
   - artifactory-service.yaml
   - artifactory-pv.yaml
-  - artifactory-pvc.yaml
+
 
