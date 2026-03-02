@@ -22,11 +22,13 @@ spec:
       persistence:
         enabled: true
         size: 5Gi
+        storageClass: ""
         existingClaim: pv-postgresql
     artifactory:
       persistence:
         enabled: true
         size: 10Gi
+        storageClass: ""
         existingClaim: pv-artifactory
     affinity:
       nodeAffinity:
