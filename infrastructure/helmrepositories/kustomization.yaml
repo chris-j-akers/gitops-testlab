@@ -1,0 +1,3 @@
+resources:
+  - bitnami.yaml
+  - jfrog.yaml
