@@ -8,28 +8,26 @@ spec:
   chart:
     spec:
       chart: artifactory-oss
-      version: "2.1.0"    # replace with an actual available version
+      version: 8.8.1
       sourceRef:
         kind: HelmRepository
         name: jfrog
         namespace: flux-system
   values:
-    artifactory:
-      database:
-        type: postgresql
-        driver: org.postgresql.Driver
-        host: postgres.database.svc.cluster.local
-        port: 5432
-        username: artifactory
-        password: artifactory123
-        database: artifactory
     postgresql:
-      enabled: false        # we’re using our external Postgres instead
-    persistence:
       enabled: true
-      storageClass: ""
-      size: 20Gi
-      path: /mnt/artifactory_data
+      postgresqlDatabase: artifactory
+      postgresqlUsername: artifactory
+      postgresqlPassword: artifactory123
+      persistence:
+        enabled: true
+        size: 5Gi
+        storageClass: standard   # adjust for your cluster
+    artifactory:
+      persistence:
+        enabled: true
+        size: 10Gi
+        storageClass: standard   # adjust for your cluster
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
