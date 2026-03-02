@@ -2,5 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - namespace.yaml
+  - postgres/postgres-pv.yaml            # <-- add this
   - artifactory/artifactory-helmrelease.yaml
   - postgres/postgres-helmrelease.yaml
