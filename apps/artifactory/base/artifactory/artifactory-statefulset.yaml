@@ -44,7 +44,9 @@ spec:
           value: "-Xms512m -Xmx1024m -Djava.security.egd=file:/dev/./urandom"
         - name: ARTIFACTORY_HOME
           value: /opt/jfrog/artifactory
-      restartPolicy: Always
+        - name: ARTIFACTORY_CONTEXT_PATH
+          value: /         
+      restartPolicy: Always 
   volumeClaimTemplates:
   - metadata:
       name: artifactory-storage
