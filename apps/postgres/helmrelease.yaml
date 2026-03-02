@@ -7,7 +7,7 @@ spec:
   chart:
     spec:
       chart: postgresql
-      version: 15.2.0
+      version: 15.3.0           # update to a chart version that exists
       sourceRef:
         kind: HelmRepository
         name: bitnami
@@ -22,9 +22,7 @@ spec:
     primary:
       persistence:
         enabled: true
-        size: 10Gi
-        storageClass: ""
-        path: /mnt/postgres_data
+        existingClaim: postgres-pv   # use the PV we created
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
