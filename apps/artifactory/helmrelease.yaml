@@ -13,25 +13,5 @@ spec:
         kind: HelmRepository
         name: jfrog
         namespace: flux-system
-  values:
-    postgresql:
-      enabled: true
-      postgresqlDatabase: artifactory
-      postgresqlUsername: artifactory
-      postgresqlPassword: artifactory123
-      persistence:
-        enabled: true
-        existingClaim: data-artifactory-oss-postgresql-0
-    artifactory:
-      persistence:
-        enabled: true
-        existingClaim: artifactory-volume-artifactory-oss-artifactory-0
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: kubernetes.io/hostname
-                  operator: In
-                  values:
-                    - cakers-worker-1.lab.local
+  values: {} # use all chart defaults
+  
