@@ -8,7 +8,7 @@ primary:
   persistence:
     enabled: true
     size: 10Gi
-    storageClass: ""   # empty for hostPath
+    storageClass: ""
     path: /mnt/postgres_data
 
 affinity:

@@ -1,4 +1,4 @@
 resources:
-  - ../../../infrastructure/helmrepositories/helmrepositories.yaml
-  - ../../../apps/postgres/overlays/lab
-  - ../../../apps/artifactory/overlays/lab
+  - ../../../infrastructure/helmrepositories
+  - ../../../apps/postgres
+  - ../../../apps/artifactory
