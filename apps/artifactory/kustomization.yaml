@@ -4,7 +4,7 @@ resources:
 resources:
   - namespace.yaml
   - pv-artifactory.yaml
-  - pv-postgres.yaml
+  - pv-postgresql.yaml
   - pvc-artifactory.yaml
-  - pvc-postgres.yaml
+  - pvc-postgresql.yaml
   - helmrelease.yaml
