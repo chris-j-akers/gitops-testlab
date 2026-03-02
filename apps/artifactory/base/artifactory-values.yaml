@@ -1,0 +1,25 @@
+artifactory:
+  database:
+    type: postgresql
+    driver: org.postgresql.Driver
+    host: postgres.database.svc.cluster.local
+    port: 5432
+    username: artifactory
+    password: artifactory123
+    database: artifactory
+
+persistence:
+  enabled: true
+  storageClass: ""   # empty for hostPath
+  size: 20Gi
+  path: /mnt/artifactory_data
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - cakers-worker-1.lab.local

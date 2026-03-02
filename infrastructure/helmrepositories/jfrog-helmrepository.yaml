@@ -4,6 +4,5 @@ metadata:
   name: jfrog
   namespace: flux-system
 spec:
+  interval: 10m
   url: https://charts.jfrog.io/
-  interval: 1m
-  

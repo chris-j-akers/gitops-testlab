@@ -1,4 +1,4 @@
 resources:
   - ../../base/namespace.yaml
   - ../../base/helmrelease.yaml
-  - ../../base/artifactory-values.yaml
+  - ../../base/postgres-values.yaml
