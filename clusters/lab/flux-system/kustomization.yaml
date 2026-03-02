@@ -1,4 +1,0 @@
-resources:
-  - ../../../infrastructure/helmrepositories
-  - ../../../apps/postgres
-  - ../../../apps/artifactory
