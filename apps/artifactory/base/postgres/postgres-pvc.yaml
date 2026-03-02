@@ -18,3 +18,17 @@ spec:
               operator: In
               values:
                 - cakers-worker-2.lab.local
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: artifactory
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: postgres-pv
+  storageClassName: ""

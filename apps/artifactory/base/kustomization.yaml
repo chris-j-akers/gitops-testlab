@@ -5,10 +5,7 @@ namespace: artifactory
 
 resources:
   - namespace.yaml
-  - artifactory/artifactory-pv.yaml
-  - artifactory/artifactory-service.yaml
-  - artifactory/artifactory-statefulset.yaml
-  - artifactory/artifactory-ingress.yaml
-  - postgres/postgres-pv.yaml
-  - postgres/postgres-service.yaml
-  - postgres/postgres-statefulset.yaml
+  - artifactory/artifactory-pvc.yaml
+  - artifactory/artifactory-helmrelease.yaml
+  - postgres/postgres-pvc.yaml
+  - postgres/postgres-helmrelease.yaml

@@ -1,2 +1,2 @@
-./get-kustomizations.py
-./kustomizations_combined.txt
+get-kustomizations.py
+kustomizations_combined.txt

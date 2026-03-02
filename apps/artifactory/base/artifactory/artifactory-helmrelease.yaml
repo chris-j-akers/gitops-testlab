@@ -1,0 +1,40 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: artifactory
+  namespace: artifactory
+spec:
+  chart:
+    spec:
+      chart: artifactory
+      version: "8.37.3"
+      sourceRef:
+        kind: HelmRepository
+        name: jfrog
+        namespace: flux-system
+  values:
+    artifactory:
+      service:
+        type: ClusterIP
+        port: 8081
+      ingress:
+        enabled: true
+        hosts:
+          - host: artifactory.lab.local
+            paths:
+              - path: /
+                pathType: Prefix
+      persistence:
+        enabled: true
+        size: 10Gi
+        existingClaim: artifactory-pvc
+        storageClass: ""
+      database:
+        type: postgresql
+        driver: org.postgresql.Driver
+        url: jdbc:postgresql://postgres.artifactory.svc.cluster.local:5432/artifactory
+        username: artifactory
+        password: password
+    extraJavaOpts: "-Xms512m -Xmx1024m -Djava.security.egd=file:/dev/./urandom"
+    nodeSelector:
+      kubernetes.io/hostname: cakers-worker-1.lab.local
