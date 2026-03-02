@@ -22,7 +22,7 @@ spec:
       persistence:
         enabled: true
         size: 5Gi
-        storageClass: ""   # blank for hostPath lab or default storage
+        storageClass: ""
     nodeSelector:
       kubernetes.io/hostname: cakers-worker-2.lab.local
     global:
