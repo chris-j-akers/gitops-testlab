@@ -5,6 +5,7 @@ metadata:
   namespace: artifactory
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
+    kubernetes.io/ingress.class: nginx   # <--- add this    
 spec:
   rules:
     - host: artifactory.lab.local
