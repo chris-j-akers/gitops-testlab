@@ -1,0 +1,9 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: jfrog
+  namespace: flux-system
+spec:
+  url: https://charts.jfrog.io/
+  interval: 1m
+  
