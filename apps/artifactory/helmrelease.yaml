@@ -22,12 +22,12 @@ spec:
       persistence:
         enabled: true
         size: 5Gi
-        storageClass: standard   # adjust for your cluster
+        existingClaim: pv-postgresql
     artifactory:
       persistence:
         enabled: true
         size: 10Gi
-        storageClass: standard   # adjust for your cluster
+        existingClaim: pv-artifactory
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
