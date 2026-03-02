@@ -15,13 +15,18 @@ spec:
         namespace: flux-system
   values:
     postgresql:
-      enabled: true
       postgresqlDatabase: artifactory
       postgresqlUsername: artifactory
       postgresqlPassword: artifactory123
-      # persistence: removed → use chart defaults (dynamic PVCs)
+      persistence:
+        enabled: true
+        size: 5Gi
+        storageClass: standard 
     artifactory:
-      # persistence removed → use chart defaults (dynamic PVCs)
+      persistence:
+        enabled: true
+        size: 10Gi
+        storageClass: standard
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
