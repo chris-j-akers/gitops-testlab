@@ -14,20 +14,19 @@ spec:
         name: bitnami
         namespace: flux-system
   values:
+    primary:
+      image:
+        registry: docker.io
+        repository: bitnami/postgresql
+        tag: 15.3.0-debian-11-r0
+      persistence:
+        enabled: true
+        size: 5Gi
+        storageClass: ""   # blank for hostPath lab or default storage
+    nodeSelector:
+      kubernetes.io/hostname: cakers-worker-2.lab.local
     global:
       postgresql:
         postgresqlDatabase: artifactory
         postgresqlUsername: artifactory
         postgresqlPassword: password
-    primary:
-      image:
-        registry: docker.io
-        repository: bitnami/postgresql
-        tag: 15.3.0-debian-11-r0   # ✅ valid tag    
-      persistence:
-        enabled: true
-        size: 5Gi
-        existingClaim: postgres-pvc
-        storageClass: ""
-    nodeSelector:
-      kubernetes.io/hostname: cakers-worker-2.lab.local

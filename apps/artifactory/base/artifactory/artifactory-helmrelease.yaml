@@ -7,12 +7,11 @@ spec:
   interval: 1m
   chart:
     spec:
-      chart: artifactory-oss         # ⚡ correct chart name
+      chart: artifactory-oss
       sourceRef:
         kind: HelmRepository
         name: jfrog
         namespace: flux-system
-      # version: "7.37.3"           # optional, omit to use latest
   values:
     artifactory:
       service:
@@ -28,12 +27,11 @@ spec:
       persistence:
         enabled: true
         size: 10Gi
-        existingClaim: artifactory-pvc
         storageClass: ""
       database:
         type: postgresql
         driver: org.postgresql.Driver
-        url: jdbc:postgresql://postgres.artifactory.svc.cluster.local:5432/artifactory
+        url: jdbc:postgresql://artifactory-postgres.artifactory.svc.cluster.local:5432/artifactory
         username: artifactory
         password: password
     extraJavaOpts: "-Xms512m -Xmx1024m -Djava.security.egd=file:/dev/./urandom"
