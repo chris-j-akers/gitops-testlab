@@ -1,0 +1,22 @@
+global:
+  postgresql:
+    postgresqlDatabase: artifactory
+    postgresqlUsername: artifactory
+    postgresqlPassword: artifactory123
+
+primary:
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""   # empty for hostPath
+    path: /mnt/postgres_data
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - cakers-worker-2.lab.local

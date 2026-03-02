@@ -1,3 +1,0 @@
-resources:
-  - helmrepositories/jfrog-helmrepository.yaml
-  - helmrepositories/bitnami-helmrepository.yaml
