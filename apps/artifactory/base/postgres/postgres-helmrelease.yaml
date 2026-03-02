@@ -14,11 +14,11 @@ spec:
         name: bitnami
         namespace: flux-system
   values:
+    image:
+      registry: docker.io
+      repository: bitnami/postgresql
+      tag: 15.3.0-debian-11-r0  
     primary:
-      image:
-        registry: docker.io
-        repository: bitnami/postgresql
-        tag: 15.3.0-debian-11-r0
       persistence:
         enabled: true
         size: 5Gi
