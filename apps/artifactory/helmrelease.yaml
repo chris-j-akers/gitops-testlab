@@ -22,6 +22,7 @@ spec:
       persistence:
         enabled: true
         size: 5Gi
+        existingClaim: pvc-postgresql
     artifactory:
       persistence:
         enabled: true
