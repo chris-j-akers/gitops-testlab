@@ -20,6 +20,10 @@ spec:
         postgresqlUsername: artifactory
         postgresqlPassword: password
     primary:
+      image:
+        registry: docker.io
+        repository: bitnami/postgresql
+        tag: 15.3.0-debian-11-r0   # ✅ valid tag    
       persistence:
         enabled: true
         size: 5Gi
