@@ -11,3 +11,4 @@ spec:
       storage: 10Gi
   volumeName: pv-artifactory
   storageClassName: ""
+  

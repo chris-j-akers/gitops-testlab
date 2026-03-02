@@ -21,12 +21,11 @@ spec:
       postgresqlPassword: artifactory123
       persistence:
         enabled: true
-        size: 5Gi
-        existingClaim: pvc-postgresql
+        existingClaim: data-artifactory-oss-postgresql-0
     artifactory:
       persistence:
         enabled: true
-        existingClaim: pvc-artifactory
+        existingClaim: artifactory-volume-artifactory-oss-artifactory-0
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
