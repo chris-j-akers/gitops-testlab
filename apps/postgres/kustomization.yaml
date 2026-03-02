@@ -1,4 +1,4 @@
 resources:
   - namespace.yaml
   - helmrelease.yaml
-  - postgres-values.yaml
+
