@@ -21,12 +21,12 @@ spec:
       persistence:
         enabled: true
         size: 5Gi
-        storageClass: standard 
+        storageClass: local-path 
     artifactory:
       persistence:
         enabled: true
         size: 10Gi
-        storageClass: standard
+        storageClass: local-path
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
