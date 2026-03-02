@@ -1,0 +1,58 @@
+./infrastructure/kustomization.yaml
+-----
+resources:
+  - ingress
+
+
+
+./infrastructure/ingress/kustomization.yaml
+-----
+resources:
+  - ingress-nginx
+
+
+./infrastructure/ingress/ingress-nginx/kustomization.yaml
+-----
+resources:
+  - helmrepository.yaml
+  - helmrelease.yaml
+
+
+./clusters/lab/flux-system/kustomization.yaml
+-----
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- gotk-components.yaml
+- gotk-sync.yaml
+- ../../../apps/artifactory/overlays/lab
+
+
+./apps/artifactory/overlays/lab/kustomization.yaml
+-----
+metadata:
+  namespace: artifactory
+resources:
+  - ../../base
+
+
+
+
+./apps/artifactory/base/kustomization.yaml
+-----
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: artifactory
+
+resources:
+  - namespace.yaml
+  - artifactory/artifactory-pv.yaml
+  - artifactory/artifactory-service.yaml
+  - artifactory/artifactory-statefulset.yaml
+  - artifactory/artifactory-ingress.yaml
+  - postgres/postgres-pv.yaml
+  - postgres/postgres-service.yaml
+  - postgres/postgres-statefulset.yaml
+
+
