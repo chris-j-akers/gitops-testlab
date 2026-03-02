@@ -4,6 +4,7 @@ metadata:
   name: artifactory-postgres
   namespace: artifactory
 spec:
+  interval: 1m
   chart:
     spec:
       chart: postgresql
