@@ -7,12 +7,12 @@ spec:
   interval: 1m
   chart:
     spec:
-      chart: artifactory
-      version: "8.37.3"
+      chart: artifactory-oss         # ⚡ correct chart name
       sourceRef:
         kind: HelmRepository
         name: jfrog
         namespace: flux-system
+      # version: "7.37.3"           # optional, omit to use latest
   values:
     artifactory:
       service:
