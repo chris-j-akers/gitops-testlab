@@ -1,2 +1,3 @@
 resources:
-  - ingress-nginx
+  - helmrepository.yaml
+  - helmrelease.yaml
