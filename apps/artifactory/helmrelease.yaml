@@ -14,26 +14,6 @@ spec:
         name: jfrog
         namespace: flux-system
   values:
-    postgresql:
-      auth:
-        username: artifactory
-        password: artifactory123
-        database: artifactory
       persistence:
-        enabled: true
-        size: 5Gi
-        storageClass: local-path 
-    artifactory:
-      persistence:
-        enabled: true
-        size: 10Gi
-        storageClass: local-path
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: kubernetes.io/hostname
-                  operator: In
-                  values:
-                    - cakers-worker-1.lab.local
+        size: 20Gi         # Must match your PV
+        storageClass: ""    # Blank so it binds to your hostPath PV
