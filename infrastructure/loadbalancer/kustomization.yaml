@@ -1,4 +1,4 @@
 resources:
-  - metallb.yaml
   - IPAddressPool.yaml
   - L2Advertisment.yaml
+  - metallb.yaml  
