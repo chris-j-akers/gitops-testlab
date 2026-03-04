@@ -12,3 +12,36 @@ spec:
   storageClassName: ""   # MUST be empty
   hostPath:
     path: /mnt/data/artifactory-data
+
+
+# TO MATCH:
+
+# Storage: 20Gi
+# AccessMode: ReadWriteOnce
+# VolumeMode: Filesystem
+# StorageClassName: "" (empty — meaning manual PV only)
+
+# ➜ kubectl get pvc artifactory-volume-artifactory-oss-0 -n artifactory -o yaml
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   creationTimestamp: "2026-03-04T16:07:56Z"
+#   finalizers:
+#   - kubernetes.io/pvc-protection
+#   labels:
+#     app: artifactory
+#     release: artifactory-oss
+#     role: artifactory
+#   name: artifactory-volume-artifactory-oss-0
+#   namespace: artifactory
+#   resourceVersion: "44679"
+#   uid: 2e4b0c19-3ffb-40d6-9157-55a8fcb4fa9e
+# spec:
+#   accessModes:
+#   - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 20Gi
+#   volumeMode: Filesystem
+# status:
+#   phase: Pending
