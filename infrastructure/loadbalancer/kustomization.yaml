@@ -1,0 +1,4 @@
+resources:
+  - metallb
+  - IPAddressPool
+  - L2Advertisement

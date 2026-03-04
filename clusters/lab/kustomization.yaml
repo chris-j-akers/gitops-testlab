@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
 resources:
   - ../../infrastructure/helmrepositories
+  - ../../infrastructure/loadbalancer
   - ../../apps/artifactory
 
