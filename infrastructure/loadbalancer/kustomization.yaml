@@ -1,5 +1,5 @@
 resources:
-  - metallb.yaml  
-  - IPAddressPool.yaml
-  - L2Advertisment.yaml
+ - github.com/metallb/metallb/config/native?ref=v0.15.3
+
+
 
