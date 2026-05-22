@@ -1,7 +1,0 @@
-resources:
- - namespace.yaml
- - metallb-config.yaml
- - metallb.yaml
-
-
-

@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(awk '/^kind: Deployment/{found=1} found && /^  name:/{print; found=0}' /home/cakers/src/gitops-testlab/clusters/lab/flux-system/gotk-components.yaml)"
+      "Bash(awk '/^kind: Deployment/{found=1} found && /^  name:/{print; found=0}' /home/cakers/src/gitops-testlab/clusters/lab/flux-system/gotk-components.yaml)",
+      "Bash(git -C /home/cakers/src/gitops-testlab log --oneline -5)",
+      "Bash(kubectl get *)",
+      "Bash(kubectl describe *)",
+      "Bash(flux reconcile *)",
+      "Bash(ssh kubeadmin@cakers-cp-1 \"flux suspend helmrelease artifactory-oss -n artifactory && flux resume helmrelease artifactory-oss -n artifactory\")",
+      "Bash(ssh kubeadmin@cakers-cp-1 \"kubectl get svc -n artifactory\")",
+      "Bash(ssh kubeadmin@cakers-cp-1 \"kubectl get nodes -o wide && echo '---' && kubectl version --short 2>/dev/null || kubectl version\")",
+      "Bash(ssh kubeadmin@cakers-cp-1 \"flux version 2>/dev/null && echo '---' && kubectl get helmrelease -A\")"
     ]
   }
 }
