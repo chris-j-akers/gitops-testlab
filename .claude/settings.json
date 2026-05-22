@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '/^kind: Deployment/{found=1} found && /^  name:/{print; found=0}' /home/cakers/src/gitops-testlab/clusters/lab/flux-system/gotk-components.yaml)"
+    ]
+  }
+}

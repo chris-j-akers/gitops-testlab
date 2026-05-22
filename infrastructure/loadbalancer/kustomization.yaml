@@ -1,6 +1,6 @@
 resources:
  - namespace.yaml
- - metallb-configmap.yaml
+ - metallb-config.yaml
  - metallb.yaml
 
 
