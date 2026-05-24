@@ -9,7 +9,23 @@
       "Bash(ssh kubeadmin@cakers-cp-1 \"flux suspend helmrelease artifactory-oss -n artifactory && flux resume helmrelease artifactory-oss -n artifactory\")",
       "Bash(ssh kubeadmin@cakers-cp-1 \"kubectl get svc -n artifactory\")",
       "Bash(ssh kubeadmin@cakers-cp-1 \"kubectl get nodes -o wide && echo '---' && kubectl version --short 2>/dev/null || kubectl version\")",
-      "Bash(ssh kubeadmin@cakers-cp-1 \"flux version 2>/dev/null && echo '---' && kubectl get helmrelease -A\")"
+      "Bash(ssh kubeadmin@cakers-cp-1 \"flux version 2>/dev/null && echo '---' && kubectl get helmrelease -A\")",
+      "Bash(ssh kubeadmin@cakers-cp-1 \"kubectl get all -A --no-headers | grep -v 'kube-system\\\\|kube-public\\\\|kube-node-lease\\\\|flux-system' | head -60\")",
+      "Bash(ssh kubeadmin@cakers-cp-1 \"flux get kustomizations -A && echo '---' && kubectl get pv\")",
+      "Bash(kubectl logs *)",
+      "Bash(python3 -c \"import sys,json,base64; d=json.load\\(sys.stdin\\); [print\\(k+':', base64.b64decode\\(v\\).decode\\(\\)\\) for k,v in d.items\\(\\)]\")",
+      "Bash(kubectl exec *)",
+      "Bash(kubectl scale *)",
+      "Bash(kubectl delete *)",
+      "Bash(kubectl wait *)",
+      "Bash(ssh -o StrictHostKeyChecking=no cakers-worker-3.lab.local \"sudo rm -rf /mnt/data/postgres-data/* && echo 'Wiped' && ls /mnt/data/postgres-data/\")",
+      "Bash(ssh -o StrictHostKeyChecking=no kubeadmin@cakers-worker-3.lab.local \"sudo rm -rf /mnt/data/postgres-data/* && echo 'Wiped' && ls /mnt/data/postgres-data/\")",
+      "Bash(kubectl create *)",
+      "Bash(kubectl apply *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(ssh -o StrictHostKeyChecking=no kubeadmin@cakers-cp-1.lab.local 'flux reconcile source git flux-system -n flux-system && flux reconcile helmrelease artifactory-oss -n artifactory --with-source')"
     ]
   }
 }
