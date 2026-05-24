@@ -13,3 +13,12 @@ spec:
         kind: HelmRepository
         name: jfrog
         namespace: flux-system
+  valuesFrom:
+    - kind: Secret
+      name: artifactory-db-credentials
+      valuesKey: password
+      targetPath: postgresql.auth.password
+    - kind: Secret
+      name: artifactory-db-credentials
+      valuesKey: postgresPassword
+      targetPath: postgresql.auth.postgresPassword
