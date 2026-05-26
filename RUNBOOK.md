@@ -38,10 +38,12 @@ This is a **GitOps lab** — a self-hosted Kubernetes cluster where the desired 
 
 The core principle: **git is the single source of truth**. You never `kubectl apply` anything directly. Instead, you commit a change, push it, and Flux reconciles the cluster to match.
 
+> **What does "reconcile" mean?** Flux continuously compares what the cluster looks like *right now* against what the YAML files say it *should* look like. If there's a difference, it fixes it. This is called reconciliation — bringing reality in line with the desired state.
+
 This lab runs:
 - **Flux v2.3.0** — the GitOps engine
-- **MetalLB v0.15.3** — a software load balancer (gives `LoadBalancer`-type Services real IPs on a bare-metal cluster, the way a cloud provider would)
-- **Artifactory OSS v107.133.12** — a self-hosted artifact registry (Docker images, Helm charts, packages, etc.)
+- **MetalLB v0.15.3** — a software load balancer (explained fully in Section 5.5 and Section 10)
+- **Artifactory OSS v107.133.12** — a self-hosted artifact registry for storing Docker images, Helm charts, and other packages
 
 ---
 
@@ -59,6 +61,12 @@ This lab runs:
 - **OS:** Rocky Linux 10.1
 - **CNI (network plugin):** Flannel (installed manually after `kubeadm init`)
 - **MetalLB IP pool:** `192.168.56.200–192.168.56.210` (layer2/ARP mode, same subnet as nodes)
+
+> **What is a control plane node vs a worker node?** Think of the control plane as the manager of the cluster. It doesn't run your applications — it runs the software that makes decisions: scheduling pods, tracking the state of everything, accepting API requests from you (via `kubectl`). Worker nodes are where your actual applications run. The control plane tells workers what to run, and workers report back their status.
+
+> **What is a CNI?** CNI stands for Container Network Interface. It's a plugin that handles networking between pods. Without it, pods on the same node can't talk to pods on other nodes. Think of it as the wiring that connects all the containers together. There are many CNI plugins (Flannel, Calico, Cilium, OVN-Kubernetes) — they all do the same job in different ways.
+
+> **What is a subnet?** A subnet is a range of IP addresses that are all on the same local network segment. The notation `192.168.56.0/24` means "all addresses from 192.168.56.0 to 192.168.56.255". The `/24` is a prefix length — it tells you how many of the 32 bits in the IP address are fixed (the "network" part) versus variable (the "host" part). All four nodes and the MetalLB IP pool are in this same subnet, which means they can talk to each other directly without needing a router.
 
 ---
 
@@ -97,6 +105,15 @@ sudo ip link delete cni0 2>/dev/null || true
 sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sudo iptables -X
 ```
 
+**What each command does:**
+- `kubeadm reset -f` — undoes everything `kubeadm join` did. Stops kubelet, removes the node from the cluster's records, and cleans up Kubernetes configuration files. The `-f` flag means "don't ask for confirmation".
+- `rm -rf /etc/cni/net.d` — removes the CNI configuration files. If these are left behind, the new CNI install will conflict with the old config.
+- `ip link delete flannel.1` — deletes the virtual network interface Flannel created. This is like unplugging a virtual network cable. The `2>/dev/null || true` means "if this fails because the interface doesn't exist, that's fine, continue anyway".
+- `ip link delete cni0` — same idea: removes the virtual bridge device that the CNI created to connect containers together.
+- `iptables -F ... -X` — flushes (clears) all iptables rules. `-F` flushes all rules in all chains, `-t nat -F` and `-t mangle -F` flush the NAT and mangle rule tables, and `-X` deletes any custom chains. Without this, Kubernetes's old routing rules would persist and interfere with the new cluster.
+
+> **What is iptables?** `iptables` is the Linux kernel's built-in packet filtering and routing system. Think of it as a very programmable traffic cop sitting in the kernel that inspects every network packet and decides what to do with it: forward it on, drop it, modify it, redirect it to a different destination. Kubernetes makes heavy use of iptables to route traffic to the right pod when you access a Service IP.
+
 ### On the control plane node
 
 ```bash
@@ -108,13 +125,19 @@ sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sud
 rm -rf ~/.kube
 ```
 
+The extra `rm -rf ~/.kube` removes your local kubeconfig — the file that tells `kubectl` where the cluster API server is and what credentials to use to connect. You'll regenerate this when you run `kubeadm init` again.
+
 ### Delete the credentials Secret
 
 The `artifactory-db-credentials` Secret is not in git, so `kubeadm reset` won't touch it — but it lives in the `artifactory` namespace which disappears with the cluster anyway. Nothing to do here; just remember to re-create it when you rebuild (Phase 2.2).
 
 ### Clean up Flux from GitHub
 
-Flux creates a deploy key on your GitHub repo so it can pull over SSH. If you re-bootstrap, it regenerates this key. To avoid a conflict, delete the old one first:
+Flux creates a **deploy key** on your GitHub repo so it can pull over SSH. If you re-bootstrap, it regenerates this key. To avoid a conflict, delete the old one first:
+
+> **What is a deploy key?** It's a special SSH public/private key pair. The public key is registered with GitHub, which then allows whoever holds the matching private key to pull from (and optionally push to) the repository. It's called a "deploy key" because it's intended for automated systems (like Flux) rather than human users. Flux stores the private key as a Kubernetes Secret inside the cluster — GitHub stores the public key. Together they allow Flux to authenticate to GitHub without a username and password.
+
+> **What is SSH?** SSH (Secure Shell) is a protocol for encrypted communication between two computers. It's most commonly used for remote terminal access, but it's also widely used for securely fetching git repositories. The key pair mechanism means: the remote end (GitHub) holds a "lock" (public key), and only whoever holds the matching "key" (private key) can open it.
 
 1. Go to your GitHub repo → **Settings → Deploy keys**
 2. Delete the key named `flux-system`
@@ -142,9 +165,11 @@ Now proceed to Phase 1 as if the nodes are fresh.
 
 ### 5.1 Pre-flight: Every Node
 
-Kubernetes has a few hard requirements that Rocky Linux doesn't satisfy by default.
+Kubernetes has a few hard requirements that Rocky Linux doesn't satisfy by default. This section prepares each node before Kubernetes is installed.
 
-**Disable swap.** Kubernetes refuses to start if swap is on. It wants full control of memory allocation.
+---
+
+**Disable swap.**
 
 ```bash
 sudo swapoff -a
@@ -152,20 +177,54 @@ sudo swapoff -a
 sudo sed -i '/\bswap\b/d' /etc/fstab
 ```
 
-**Set SELinux to permissive.** For a lab, permissive is the path of least resistance. In production you'd configure SELinux policies properly.
+> **What is swap?** RAM is your computer's fast, short-term memory — it holds data that running programs are actively using. When RAM fills up, the operating system can use a portion of the hard disk as overflow "RAM". This disk area is called **swap** (or a swap partition/file). It's much slower than real RAM, but it prevents the system from running out of memory entirely.
+>
+> **Why does Kubernetes refuse to start if swap is on?** Kubernetes needs to be able to make precise, reliable decisions about how much memory each pod gets. It tells the kernel "this pod is allowed 512MB" and the kernel enforces that limit. When swap is enabled, the kernel can quietly let a process use more memory than its limit by spilling onto disk — this makes Kubernetes's memory accounting unpredictable and unreliable. By requiring swap to be off, Kubernetes guarantees that its memory limits are hard and accurate.
+>
+> `swapoff -a` turns off swap immediately (the `-a` means "all swap devices"). But this is temporary — it won't survive a reboot. The `sed` command edits `/etc/fstab` (the file that controls what gets mounted at boot) to permanently remove any swap entries, so swap stays off after reboots.
+
+---
+
+**Set SELinux to permissive.**
 
 ```bash
 sudo setenforce 0
 sudo sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
 ```
 
-**Disable the firewall.** These are VMs on an isolated network. Firewalld would block inter-node traffic (etcd, kubelet, Flannel VXLAN, etc.).
+> **What is SELinux?** SELinux (Security-Enhanced Linux) is a security system built into the Linux kernel. It goes beyond standard Linux file permissions by labelling every process, file, and network port with a security context, then enforcing a policy that says which processes are allowed to do what. For example, it can prevent a web server process from reading files it has no business reading, even if the file permissions would otherwise allow it.
+>
+> **What is the difference between `enforcing` and `permissive`?**
+> - **Enforcing** mode: SELinux actively blocks anything that violates its policy and logs the violation.
+> - **Permissive** mode: SELinux still logs violations, but it doesn't block anything. Everything still works — you're just getting a warning log.
+>
+> **Why set permissive for a lab?** Kubernetes and its components interact with the kernel in complex ways. Making SELinux happy with all of those interactions in a lab environment would require carefully writing and maintaining SELinux policy rules — a significant amount of work that distracts from learning Kubernetes itself. Permissive mode lets you get the cluster running while still seeing SELinux audit logs if you want to inspect them. In a production environment, you'd invest the time to write correct SELinux policies.
+>
+> `setenforce 0` switches to permissive immediately. The `sed` command updates the config file so it persists across reboots (`0` = permissive, `1` = enforcing).
+
+---
+
+**Disable the firewall.**
 
 ```bash
 sudo systemctl disable --now firewalld
 ```
 
-**Load kernel modules.** Kubernetes networking depends on two kernel modules that aren't loaded by default:
+> **What is `firewalld`?** `firewalld` is a host-based firewall — software running on each individual machine that controls which network connections are allowed in and out. Think of it as a bouncer for network traffic: it has a list of allowed ports and services, and it drops anything that doesn't match.
+>
+> **Why does firewalld cause problems for Kubernetes?** A Kubernetes cluster relies on many different network connections between nodes — for example:
+> - `etcd` (the cluster database) uses ports 2379–2380
+> - The API server uses port 6443
+> - `kubelet` uses port 10250
+> - Flannel's VXLAN overlay uses UDP port 8472
+>
+> `firewalld`'s default rules would block most of these. You could configure it to allow each port individually, but for a lab on an isolated private network (these VMs can't be reached from the internet), it's far simpler and less error-prone to disable it entirely.
+>
+> `systemctl disable --now firewalld` does two things at once: `disable` prevents it from starting at boot, and `--now` also stops it immediately.
+
+---
+
+**Load kernel modules.**
 
 ```bash
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
@@ -177,8 +236,27 @@ sudo modprobe overlay
 sudo modprobe br_netfilter
 ```
 
-- `overlay` — needed by containerd for layered container filesystems
-- `br_netfilter` — needed so iptables can see bridged traffic (how pods talk to each other and to Services)
+> **What is the Linux kernel?** The kernel is the core of the operating system. It's the software that sits directly on top of the hardware and manages everything: CPU scheduling, memory allocation, device drivers, and — critically for us — networking. When you run a program, it doesn't touch the hardware directly; it makes requests to the kernel.
+>
+> **What are kernel modules?** The kernel doesn't load every possible feature at startup — that would be wasteful. Instead, features are packaged as **modules** (sometimes called "loadable kernel modules" or LKMs): chunks of kernel code that can be loaded into the running kernel on demand and unloaded when no longer needed. Think of them like plugins for the kernel.
+>
+> The `modprobe` command loads a module into the running kernel right now. The file `/etc/modules-load.d/k8s.conf` tells the system to load these modules automatically at boot. Without both, the modules would need to be loaded manually after every reboot.
+
+**The `overlay` module** — this is needed by containerd (the container runtime) to run containers efficiently.
+
+> **What does `overlay` do?** Container images are built in layers — like a stack of transparent acetate sheets. The base image might be "Ubuntu 22.04", then on top of that is "Ubuntu 22.04 + Python 3", then on top of that is your actual application code. This layering is efficient because many containers can share the same base layers without duplicating the data on disk. The `overlay` filesystem driver is what allows the Linux kernel to present these stacked layers as a single unified filesystem to the process running inside the container. Without it, each container would need a full copy of all its files, wasting huge amounts of disk space.
+
+**The `br_netfilter` module** — this is needed so that Kubernetes's packet routing works correctly when pods communicate.
+
+> **What is a network bridge?** A network bridge is a virtual switch inside the kernel. When multiple containers on the same node need to communicate with each other, they're connected to a bridge — just like multiple computers plugging into a physical network switch. The kernel's bridge device forwards packets between containers based on their MAC addresses.
+>
+> **What is iptables again, and why does it need to see bridged traffic?** As explained above, `iptables` is the kernel's traffic cop — it intercepts packets and can route, drop, or modify them. Kubernetes uses iptables extensively to implement its Service abstraction: when you access a Service IP (like `10.96.0.1`), iptables secretly rewrites that to the actual IP of a backend pod. This is called **NAT** (Network Address Translation).
+>
+> Here's the problem: **by default, traffic flowing through a bridge bypasses iptables entirely.** The bridge handles it internally (switching based on MAC addresses) before iptables even gets a chance to see it. This means: when Pod A on Node 1 sends a packet to a Service IP, and that packet travels through the bridge to Pod B on the same node, iptables never sees the packet — so the Service IP never gets rewritten — so the connection fails.
+>
+> **What does `br_netfilter` do?** Loading this module tells the kernel: "even when a packet is being forwarded through a bridge, still send it through iptables first." It hooks bridge forwarding into the netfilter (iptables) framework. With this module loaded, every bridged packet passes through iptables, and Kubernetes's Service routing works correctly.
+
+---
 
 **Configure kernel networking settings:**
 
@@ -192,15 +270,23 @@ EOF
 sudo sysctl --system
 ```
 
-These tell the kernel to pass bridged network traffic through iptables — without this, Kubernetes Service routing breaks completely.
+> **What is `sysctl`?** `sysctl` is a mechanism for reading and modifying kernel parameters at runtime — tunable knobs that control kernel behaviour. The settings live under `/proc/sys/` as virtual files. Writing to these files changes the kernel's behaviour immediately. The file `/etc/sysctl.d/k8s.conf` stores these settings so they're re-applied at every boot. `sysctl --system` reads all the sysctl config files and applies them right now.
+
+**`net.bridge.bridge-nf-call-iptables = 1`** — this activates the behaviour that `br_netfilter` makes possible: it tells the kernel "yes, please route bridged IPv4 packets through iptables." Loading `br_netfilter` adds the *capability*, but this sysctl setting *enables* it. Without this set to `1`, loading `br_netfilter` has no effect and Kubernetes Service routing breaks completely.
+
+**`net.bridge.bridge-nf-call-ip6tables = 1`** — the same setting but for IPv6 traffic. Even if you're not using IPv6, Kubernetes components may generate IPv6 bridge traffic internally, so it's good practice to enable this too.
+
+**`net.ipv4.ip_forward = 1`** — this tells the kernel to act as a router: if a packet arrives on one network interface and its destination address belongs to a different network, forward it out through the appropriate other interface. By default, Linux does not do this — it simply drops packets that aren't destined for its own IP addresses. Kubernetes pods each have their own IP address on a virtual network, and for them to communicate with the outside world (and for external traffic to reach them), the node's kernel must forward packets between the pod network and the physical network interface. Without `ip_forward = 1`, pods are completely isolated from everything outside their node.
 
 ---
 
 ### 5.2 Install the Container Runtime (containerd)
 
-Kubernetes doesn't run containers itself. It delegates to a **container runtime**. This lab uses **containerd** — the same runtime used by Docker and by most managed Kubernetes services.
+Kubernetes doesn't run containers itself. It delegates to a **container runtime** — the software that actually creates and manages containers. This lab uses **containerd** — the same runtime used by Docker internally and by most managed Kubernetes services.
 
-> **OpenShift analogy:** containerd here is equivalent to CRI-O in OpenShift. Both implement the Container Runtime Interface (CRI) that kubelet talks to.
+> **What is a container runtime?** A container runtime is the software that takes a container image (a packaged, self-contained bundle of an application and its dependencies) and actually runs it as a process on the host. It handles: unpacking the image layers, setting up the container's isolated filesystem (using the `overlay` module from above), creating the network namespace, enforcing resource limits, and starting the process inside. Kubernetes tells the container runtime "start this container with these settings" — the runtime figures out the low-level details.
+>
+> **OpenShift analogy:** containerd here is equivalent to CRI-O in OpenShift. Both implement the **Container Runtime Interface (CRI)** — a standard API that `kubelet` (the Kubernetes node agent) uses to talk to the container runtime. This separation means Kubernetes doesn't care which runtime you use, as long as it speaks CRI.
 
 **Add the Docker repository** (containerd is distributed via Docker's repo):
 
@@ -214,12 +300,16 @@ sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker
 sudo dnf install -y containerd.io
 ```
 
-**Configure containerd.** The default config has a problem: it uses the `cgroupfs` cgroup driver, but Kubernetes expects `systemd`. Mismatched drivers cause subtle, hard-to-debug failures.
+**Configure containerd.** The default config has a critical problem: it uses the `cgroupfs` cgroup driver, but Kubernetes expects `systemd`. Mismatched drivers cause subtle, hard-to-debug failures.
 
 ```bash
 sudo mkdir -p /etc/containerd
 sudo containerd config default | sudo tee /etc/containerd/config.toml
 ```
+
+> **What are cgroups?** `cgroups` (control groups) is a Linux kernel feature that lets you group processes together and apply resource limits to the whole group. For example: "this group of processes is allowed to use at most 2 CPU cores and 1GB of RAM." Kubernetes uses cgroups to enforce resource limits on pods — when you set `resources.limits.memory: 512Mi` in a pod spec, Kubernetes creates a cgroup for that pod's containers and tells the kernel to enforce a 512MB memory cap.
+>
+> **What is a cgroup driver?** There are two ways to interact with cgroups — two different "drivers" or interfaces. The old way, `cgroupfs`, involves directly reading and writing files in the `/sys/fs/cgroup/` filesystem. The new way, `systemd`, delegates cgroup management to `systemd` (the init system that manages all services on the machine). `systemd` itself uses cgroups to manage the services it runs, so if containerd and Kubernetes both try to manage cgroups directly via `cgroupfs`, they can fight with `systemd` over who controls what — leading to resource limit failures, pod evictions, or node instability. Using `systemd` as the cgroup driver for both means everything goes through one consistent manager.
 
 Now edit the config to enable the `systemd` cgroup driver. Find the `[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]` section and set `SystemdCgroup = true`:
 
@@ -240,6 +330,8 @@ grep -i SystemdCgroup /etc/containerd/config.toml
 sudo systemctl enable --now containerd
 ```
 
+> `systemctl enable` means "start this service automatically at boot". `--now` also starts it immediately without needing a separate `systemctl start` command.
+
 ---
 
 ### 5.3 Install kubeadm, kubelet, kubectl
@@ -248,9 +340,9 @@ These three tools are what actually make Kubernetes run on the node:
 
 | Tool | What it does |
 |---|---|
-| `kubelet` | The agent that runs on every node. It talks to the API server and manages pod lifecycle. Think of it as the node's brain. |
-| `kubeadm` | A one-shot installer. You use it to initialise the control plane and join workers. After that, it's mostly idle. |
-| `kubectl` | Your CLI for talking to the cluster. Same tool you've always used. |
+| `kubelet` | The agent that runs on every node. It talks to the API server and manages pod lifecycle. Think of it as the node's brain — it receives instructions ("run this container") and reports back status ("the container is running / crashed / etc."). |
+| `kubeadm` | A one-shot installer. You use it to initialise the control plane and join workers. After setup, it's mostly idle — it's a setup tool, not a runtime component. |
+| `kubectl` | Your CLI for talking to the cluster. It sends HTTP requests to the Kubernetes API server. Same tool you've always used. |
 
 **Add the Kubernetes repository:**
 
@@ -266,6 +358,8 @@ exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
 EOF
 ```
 
+> **Why the `exclude=` line?** By default, `dnf` will upgrade any installed package when you run `dnf upgrade`. Without this exclusion, a routine system update could silently upgrade `kubelet`, `kubeadm`, and `kubectl` to the next minor version — which would be a problem because Kubernetes has strict version compatibility rules. The `exclude=` line tells `dnf` to never automatically upgrade these packages. You use `--disableexcludes=kubernetes` when you intentionally want to install or upgrade them.
+
 **Install:**
 
 ```bash
@@ -278,13 +372,15 @@ sudo dnf install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
 sudo systemctl enable kubelet
 ```
 
+> At this point, `kubelet` will start and quickly stop in a loop — this is normal. It's waiting for the cluster configuration that `kubeadm init` will provide. `systemctl enable` means it will start at boot, so once the cluster configuration arrives, it will stay running.
+
 ---
 
 ### 5.4 Initialise the Control Plane
 
 > **Control plane node only (`cakers-cp-1`)**
 
-This is the equivalent of running the OpenShift installer's control-plane phase. `kubeadm init` sets up the API server, etcd, the scheduler, and the controller manager — everything that *is* the Kubernetes control plane.
+This is the equivalent of running the OpenShift installer's control-plane phase. `kubeadm init` sets up everything that *is* the Kubernetes control plane — the cluster's brain.
 
 ```bash
 sudo kubeadm init \
@@ -294,8 +390,15 @@ sudo kubeadm init \
 
 **What these flags do:**
 
-- `--pod-network-cidr=10.244.0.0/16` — the IP range pods will get addresses from. The value `10.244.0.0/16` is what Flannel (the CNI we'll install next) expects. It must match.
-- `--apiserver-advertise-address=192.168.56.10` — the IP the API server listens on and advertises to other nodes. Use the control plane node's IP, not `localhost`.
+- `--pod-network-cidr=10.244.0.0/16` — declares the IP address range that pods will receive addresses from. A **CIDR** (Classless Inter-Domain Routing) notation like `10.244.0.0/16` describes a block of IP addresses: in this case, all addresses from `10.244.0.0` to `10.244.255.255` (65,536 addresses). This range is kept completely separate from your node IPs (`192.168.56.x`) — pods get addresses in the `10.244.x.x` range, and the CNI handles routing between them. The value `10.244.0.0/16` is specifically what Flannel (the CNI we install next) is preconfigured to expect — it must match.
+- `--apiserver-advertise-address=192.168.56.10` — the IP address the API server listens on and tells other nodes to use when connecting. Use the control plane node's actual network IP (not `localhost` or `127.0.0.1`), or the worker nodes won't be able to reach it.
+
+**What `kubeadm init` actually sets up:**
+
+> - **API server** — the HTTP/HTTPS API that everything talks to. `kubectl` talks to it. Worker nodes talk to it. Flux talks to it. It's the single point of communication for the entire cluster — nothing changes in the cluster without going through the API server.
+> - **etcd** — a distributed key-value database that stores all cluster state. Every object you create (pods, services, deployments, etc.) is stored here. It's the cluster's "memory" — if etcd is lost, the cluster's state is lost. Running `kubectl get pods` ultimately reads from etcd. Running `kubectl apply` ultimately writes to etcd.
+> - **scheduler** — watches for newly created pods that don't have a node assigned yet, then picks the best node for each pod based on available resources, node labels, affinity rules, and other constraints. It's the decision-maker for "which node should this pod land on?"
+> - **controller manager** — runs a collection of control loops (called "controllers") that continuously watch the cluster state and reconcile it toward the desired state. For example: the Deployment controller watches for Deployments and makes sure the right number of pods are running; if a pod crashes, the controller creates a new one. There are controllers for ReplicaSets, StatefulSets, Services, and many other resource types.
 
 **This takes about 2 minutes.** At the end, the output contains two things you need:
 
@@ -303,6 +406,7 @@ sudo kubeadm init \
    ```
    kubeadm join 192.168.56.10:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
    ```
+   > The `token` is a temporary credential the worker uses to authenticate with the control plane during joining. The `discovery-token-ca-cert-hash` is a fingerprint of the control plane's TLS certificate — the worker uses this to verify it's connecting to the *real* control plane and not an impostor. Port 6443 is where the Kubernetes API server listens.
 
 2. **Instructions to copy your kubeconfig** — run these now on the control plane node:
    ```bash
@@ -310,6 +414,7 @@ sudo kubeadm init \
    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
    ```
+   > **What is a kubeconfig?** It's a YAML file (usually at `~/.kube/config`) that tells `kubectl` where the cluster's API server is, what certificate to use to authenticate, and which cluster/user context to use by default. Without it, `kubectl` doesn't know how to reach your cluster.
 
 Also copy the kubeconfig to your **laptop** so you can run `kubectl` and `flux` from there:
 
@@ -331,17 +436,21 @@ scp cakers-cp-1.lab.local:/etc/kubernetes/admin.conf ~/.kube/config
 
 > **Control plane node only, but run immediately after init**
 
-Without a CNI, pods cannot communicate with each other. This is why nodes show `NotReady` right after `kubeadm init` — Kubernetes is running, but networking isn't wired up yet.
+Without a CNI, pods cannot communicate with each other or with Services. This is why nodes show `NotReady` right after `kubeadm init` — the Kubernetes control plane is running, but the networking layer isn't wired up yet.
 
 > **OpenShift analogy:** In OpenShift, OVN-Kubernetes is the CNI and it comes pre-installed. Here you pick one and install it yourself.
 
-Install Flannel — the simplest CNI that just works for a lab:
+Install Flannel — the simplest CNI for a lab:
 
 ```bash
 kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 ```
 
-Flannel creates a `flannel.1` overlay network interface on each node and handles all pod-to-pod routing. It uses the `10.244.0.0/16` CIDR you specified in `kubeadm init`.
+> **How does Flannel work?** Flannel creates a virtual **overlay network** — a network that tunnels on top of your existing physical network. Here's the problem it's solving: Pod A is on Node 1 with pod IP `10.244.1.5`, and Pod B is on Node 2 with pod IP `10.244.2.7`. Your physical network (the `192.168.56.x` subnet) has no idea what to do with a packet destined for `10.244.1.5` — those aren't real IPs from the physical network's perspective.
+>
+> Flannel solves this using **VXLAN** (Virtual eXtensible LAN): it wraps ("encapsulates") the pod-to-pod packet inside a UDP packet that the physical network *can* route. So a packet going from Pod A to Pod B actually travels as: [physical: Node1→Node2 via 192.168.56.x] [inside: pod IP packet 10.244.1.5→10.244.2.7]. On arrival at Node 2, Flannel unwraps the outer packet and delivers the inner pod-IP packet to Pod B. This all happens transparently — the pods themselves just see normal IP connectivity.
+>
+> Flannel creates a `flannel.1` virtual network interface on each node (that's the tunnel endpoint) and uses the `10.244.0.0/16` CIDR you specified in `kubeadm init` to allocate a `/24` sub-range to each node (e.g. Node 1 gets `10.244.1.0/24`, Node 2 gets `10.244.2.0/24`).
 
 Wait for the control plane node to become ready (usually takes 30–60 seconds):
 
@@ -365,7 +474,7 @@ sudo kubeadm join 192.168.56.10:6443 \
   --discovery-token-ca-cert-hash sha256:<hash>
 ```
 
-Run this on each worker. It takes 30–60 seconds per node. The node downloads its config from the control plane, starts kubelet, and registers itself.
+Run this on each worker. It takes 30–60 seconds per node. The node downloads its configuration from the control plane, starts `kubelet`, and registers itself with the API server. Once registered, the scheduler can start placing pods on it.
 
 ---
 
@@ -394,6 +503,8 @@ kubectl get pods -n kube-system
 # All should be Running or Completed
 ```
 
+> **What is a namespace?** Namespaces are a way to partition a Kubernetes cluster into virtual sub-clusters. All the core Kubernetes components (the API server helper pods, the scheduler, etcd, the CNI, etc.) run in a namespace called `kube-system`. Your applications can run in separate namespaces (e.g., `artifactory`). This separation prevents name collisions and makes it easy to apply different access controls to different teams or applications. The `-n kube-system` flag on `kubectl` commands means "look in the `kube-system` namespace".
+
 You now have a working Kubernetes cluster. On to Phase 2.
 
 ---
@@ -402,11 +513,19 @@ You now have a working Kubernetes cluster. On to Phase 2.
 
 ### 6.1 Create hostPath directories
 
-Artifactory and PostgreSQL need persistent storage. Rather than setting up a storage provisioner, this lab uses **hostPath volumes** — directories on the worker node's local filesystem that pods mount directly.
+Artifactory and PostgreSQL need **persistent storage** — storage that survives pod restarts, upgrades, and rescheduling. Unlike normal container filesystems (which are temporary and lost when a container stops), persistent storage must be backed by something durable.
+
+Rather than setting up a dedicated storage provisioner (like Rook/Ceph or Longhorn), this lab uses **hostPath volumes** — directories on the worker node's local filesystem that pods mount directly. It's the simplest possible approach: the data lives in a regular folder on the host.
+
+> **What is a PersistentVolume (PV)?** A PV is a Kubernetes object that represents a piece of storage that exists independently of any pod. It's the cluster administrator's way of saying "here is some storage, available for use." In this lab, each PV is backed by a `hostPath` directory.
+>
+> **What is a PersistentVolumeClaim (PVC)?** A PVC is a request for storage from an application. It says "I need 20Gi of storage with ReadWriteOnce access." Kubernetes matches PVCs to PVs: it finds a PV that satisfies the requirements and "binds" them together. Once bound, the pod mounts the PVC like a disk.
+>
+> **What does ReadWriteOnce mean?** It means the volume can be mounted by exactly one node at a time (though multiple pods on the same node can use it). Other access modes include ReadOnlyMany (many nodes, read-only) and ReadWriteMany (many nodes, read-write — requires special storage systems).
 
 The directories must exist before Flux tries to deploy Artifactory, otherwise the PersistentVolumeClaims will be stuck in `Pending` and the pods will never start.
 
-> **Run this on all worker nodes** (`cakers-worker-1`, `cakers-worker-2`, `cakers-worker-3`). The Kubernetes scheduler decides which node each pod lands on — because the hostPath PVs have no `nodeAffinity`, you cannot predict which worker will be chosen. Creating the directories everywhere avoids a startup failure if the pod doesn't land where you expected.
+> **Run this on all worker nodes** (`cakers-worker-1`, `cakers-worker-2`, `cakers-worker-3`). The Kubernetes scheduler decides which node each pod lands on. Because the hostPath PVs have no `nodeAffinity` (a constraint that would force a pod to run on a specific node), you cannot predict which worker will be chosen. Creating the directories everywhere avoids a startup failure if the pod doesn't land where you expected.
 
 ```bash
 sudo mkdir -p /mnt/data/artifactory-data
@@ -415,15 +534,23 @@ sudo chmod 777 /mnt/data/artifactory-data
 sudo chmod 777 /mnt/data/postgres-data
 ```
 
-> **Why `chmod 777`?** Artifactory and PostgreSQL run as non-root users inside the container (UID 1030 and 1001 respectively). They need to write to these directories, but the directories are owned by root. `777` is the simplest fix for a lab. In production, you'd use `chown` with the specific UIDs.
+> **Why `chmod 777`?** Linux file permissions control who can read, write, and execute files. `chmod 777` gives read, write, and execute permission to everyone — the owner, the group, and all other users. Artifactory and PostgreSQL run as specific non-root users inside the container (UID 1030 and UID 1001 respectively). These UIDs don't exist on the host machine, and the directories are owned by `root`. Rather than trying to `chown` the directories to UIDs that don't exist as named users on the host, `777` makes the directories writable by anyone — a pragmatic shortcut for a lab. In production, you'd use `chown 1030:1030` (using the UID directly) to give only the correct user write access.
 
 ---
 
 ### 6.2 Create the database credentials Secret
 
-The Artifactory Helm chart includes a bundled PostgreSQL instance. By default, the chart generates a **random password on every Helm install or upgrade**. Because Flux reconciles the HelmRelease on a regular interval, this means the password in the cluster Secret gets silently replaced — while the on-disk PostgreSQL database still expects the original password. The result is `FATAL: password authentication failed` and every Artifactory sidecar crash-looping.
+The Artifactory Helm chart includes a bundled PostgreSQL database. By default, the chart generates a **random password on every Helm install or upgrade**. Because Flux reconciles the HelmRelease on a regular interval (checking if the chart config matches what's in git and re-applying it if needed), this means the password in the cluster Secret gets silently replaced — while the on-disk PostgreSQL database still expects the original password. The result is `FATAL: password authentication failed` and every Artifactory sidecar crash-looping.
 
-The fix is to create a Secret with fixed credentials and tell the HelmRelease to use them via `valuesFrom`. The Secret is created **imperatively and never committed to git** — it is the one piece of state that lives only in the cluster.
+> **What is a Helm chart?** Helm is a package manager for Kubernetes — think of it like `apt` or `dnf` but for Kubernetes applications. A **chart** is a Helm package: a collection of YAML templates and default values that describe how to deploy an application. You can customise the deployment by overriding values. `helm install` renders the templates with your values and applies them to the cluster. `helm upgrade` updates an existing installation.
+>
+> **What is a Kubernetes Secret?** A Secret is a Kubernetes object for storing sensitive data — passwords, API keys, TLS certificates — separately from the application configuration. Secrets are base64-encoded (not encrypted at rest by default, but access can be restricted via RBAC). Applications can consume Secrets as environment variables or mounted files.
+>
+> **What is RBAC?** RBAC stands for Role-Based Access Control. It's how Kubernetes controls who is allowed to do what. You define Roles (a set of permissions, e.g., "can read Secrets in namespace X") and bind them to ServiceAccounts or users. Flux, for example, has a ServiceAccount with RBAC rules that allow it to create and modify resources across the cluster.
+
+The fix is to create a Secret with **fixed** credentials and tell the HelmRelease to use them via `valuesFrom`. The Secret is created **imperatively** (a one-off manual command) and **never committed to git** — it is the one piece of state that lives only in the cluster.
+
+> **What does "imperatively" mean?** Kubernetes supports two styles of interaction: **imperative** (you directly tell it what to do, e.g., `kubectl create secret ...`) and **declarative** (you describe the desired state in a YAML file and let Kubernetes figure out how to get there, e.g., `kubectl apply -f secret.yaml`). GitOps is entirely declarative. But secrets are a deliberate exception — putting passwords in git, even in a private repo, is a security risk. The `artifactory-db-credentials` Secret is therefore created imperatively and never written to a file.
 
 Run this once from your laptop (or anywhere with `kubectl` access):
 
@@ -455,6 +582,8 @@ From this point on, you stop applying things manually. Flux takes over.
   ```
 - A GitHub **Personal Access Token** with `repo` scope — create one at GitHub → Settings → Developer Settings → Personal access tokens
 
+> **What is a Personal Access Token?** GitHub uses these as an alternative to your password for API access and scripted operations. The `repo` scope means the token is allowed to read and write to your repositories. Flux needs it during bootstrap to: push the generated Flux config files to the repo, and register a deploy key on the repo. After bootstrap, Flux switches to using the SSH deploy key and the token is no longer needed (though you can keep it for re-bootstrapping).
+
 ### Run the bootstrap
 
 ```bash
@@ -485,7 +614,9 @@ flux bootstrap github \
 3. Generates `gotk-sync.yaml` — a `GitRepository` object (pointing at this repo) and a `Kustomization` object (pointing at `clusters/lab/`)
 4. Applies both files to the cluster
 5. Commits and pushes both files to this repo
-6. Generates an SSH deploy key, adds it to the GitHub repo as a deploy key, and stores it in the cluster as a Secret called `flux-system` — this is how Flux authenticates to pull from GitHub
+6. Generates an SSH deploy key, adds it to the GitHub repo as a deploy key, and stores the private key in the cluster as a Secret called `flux-system` — this is how Flux authenticates to pull from GitHub going forward
+
+> **What is `gotk`?** It stands for "GitOps Toolkit" — the underlying project that Flux v2 is built on. The files are named with the `gotk-` prefix to distinguish them from your own config files. You'll never need to edit them directly.
 
 After bootstrap completes, **Flux is running and watching the repo**. It will immediately start reconciling everything under `clusters/lab/` — installing MetalLB, configuring it, and deploying Artifactory. The whole stack takes 5–10 minutes to fully come up.
 
@@ -494,6 +625,8 @@ Watch it happen in real time:
 ```bash
 flux get kustomizations -A --watch
 ```
+
+> **What does the `-A` flag do?** `-A` is short for `--all-namespaces` — it shows resources across all namespaces, not just the default one. Adding `--watch` keeps the command running and refreshes the output as things change, like `watch kubectl get pods`.
 
 ---
 
@@ -534,9 +667,11 @@ flux get kustomizations -A --watch
 
 | Controller | Job |
 |---|---|
-| `source-controller` | Polls git repos and Helm chart repos for changes; caches downloaded artifacts locally |
-| `kustomize-controller` | Reads `Kustomization` objects and applies the referenced YAML to the cluster |
-| `helm-controller` | Reads `HelmRelease` objects and runs Helm install/upgrade/rollback |
+| `source-controller` | Polls git repos and Helm chart repos for changes. When it detects a new commit or chart version, it downloads and caches it locally so other controllers can use it. |
+| `kustomize-controller` | Reads `Kustomization` objects and applies the referenced YAML files to the cluster — essentially running `kubectl apply` on your behalf, but with health checking and dependency ordering. |
+| `helm-controller` | Reads `HelmRelease` objects and runs Helm install, upgrade, or rollback operations to keep the installed charts matching the spec. |
+
+> **What is kustomize?** Kustomize is a tool for customising Kubernetes YAML without modifying the original files. You write a `kustomization.yaml` file that lists which YAML files to include, and optionally applies patches or overrides on top. In this repo it's used in its simplest form: just listing which files to include (no patching). Flux's `kustomize-controller` uses it internally when applying resources.
 
 ### Two things called "Kustomization" — and why it's confusing
 
@@ -544,10 +679,12 @@ There are **two completely different things** called `Kustomization` in this set
 
 | Kind | API group | What it is |
 |---|---|---|
-| `Kustomization` | `kustomize.config.k8s.io/v1beta1` | A plain kustomize manifest list — just says "include these files" |
-| `Kustomization` | `kustomize.toolkit.fluxcd.io/v1` | A Flux CRD — tells the kustomize-controller to fetch and apply a path from git, with intervals, health checks, and `dependsOn` ordering |
+| `Kustomization` | `kustomize.config.k8s.io/v1beta1` | A plain kustomize manifest — just a list of files to include. This is the original kustomize tool's object. |
+| `Kustomization` | `kustomize.toolkit.fluxcd.io/v1` | A **Flux CRD** — tells the kustomize-controller to fetch a path from git and apply it, with interval scheduling, health checking, and `dependsOn` ordering. This is Flux's own custom resource type. |
 
-In this repo, `clusters/lab/kustomization.yaml` is the first kind (a list). The files it lists — `infrastructure.yaml` and `apps.yaml` — contain the second kind (Flux objects that independently reconcile parts of the cluster). Every time you see a `Kustomization`, check the `apiVersion` to know which one you're dealing with.
+> **What is a CRD (Custom Resource Definition)?** Kubernetes's API is extensible. By default, it knows about built-in resource types like Pod, Service, Deployment, etc. A CRD is a way for software to add its own new resource types to the Kubernetes API. When MetalLB installs, it registers CRDs for `IPAddressPool` and `L2Advertisement` — types that didn't exist before MetalLB was installed. Once a CRD is registered, you can create, read, update, and delete objects of that type using `kubectl` just like any built-in resource. When Flux is installed, it registers its own CRDs: `GitRepository`, `Kustomization` (the Flux kind), `HelmRepository`, `HelmRelease`, etc.
+
+In this repo, `clusters/lab/kustomization.yaml` is the first kind (a plain list). The files it lists — `infrastructure.yaml` and `apps.yaml` — contain the second kind (Flux objects that independently reconcile parts of the cluster). Every time you see a `Kustomization`, check the `apiVersion` to know which one you're dealing with.
 
 ---
 
@@ -605,11 +742,13 @@ gitops-testlab/
 repositories/ ← controllers/ ← configs/
 ```
 
-- `repositories/` — registers Helm chart sources. Everything depends on these existing first.
-- `controllers/` — installs controllers (MetalLB) via Helm. As a side effect, this installs the MetalLB **Custom Resource Definitions** (CRDs) into the cluster.
-- `configs/` — creates objects whose *types* were just installed by controllers. This layer cannot run before `controllers/` finishes, because the CRD types won't exist yet and Kubernetes will reject the objects.
+- `repositories/` — tells Flux where to find Helm charts (like adding a package repository). Everything else depends on these existing first.
+- `controllers/` — installs controllers (MetalLB) via Helm. As a side effect, this installs MetalLB's **Custom Resource Definitions** (CRDs) into the cluster — making new resource types like `IPAddressPool` available.
+- `configs/` — creates objects of the CRD types that were just installed by `controllers/`. This layer cannot run before `controllers/` finishes, because the CRD types won't exist yet and Kubernetes will reject the objects with `no matches for kind IPAddressPool`.
 
-**`apps/`** waits for the entire infrastructure chain. Artifactory needs MetalLB running (for its `LoadBalancer` Service IP) and the IP pool configured (so MetalLB knows which IPs to hand out).
+**`apps/`** waits for the entire infrastructure chain. Artifactory needs MetalLB running (to handle its `LoadBalancer` Service request) and the IP pool configured (so MetalLB knows which IPs it can hand out).
+
+> **What is a LoadBalancer Service?** A Kubernetes Service is an abstraction that gives a stable IP address to a set of pods. There are several Service types. `ClusterIP` (the default) gives a stable internal IP only accessible inside the cluster. `NodePort` exposes the service on a specific port of every node's IP. `LoadBalancer` requests an external IP from a load balancer — on cloud providers (AWS, GCP, Azure), this automatically provisions a cloud load balancer. On bare metal, there's no cloud provider, so nothing would assign the external IP... unless you install MetalLB, which fills exactly that role.
 
 ---
 
@@ -698,9 +837,18 @@ spec:
   prune: true
 ```
 
-**Why `dependsOn` is critical here:** `IPAddressPool` and `L2Advertisement` (in `configs/`) are custom resource types that are installed by the MetalLB Helm chart (in `controllers/`). If `configs/` were applied before MetalLB was installed, Kubernetes would reject the objects with `no matches for kind IPAddressPool`. `dependsOn` prevents this race condition.
+**Key fields explained:**
 
-**`wait: true` on `infra-controllers`** tells the kustomize-controller to wait until all resources — including the MetalLB HelmRelease — are fully healthy before marking this Kustomization as ready. Without `wait: true`, `infra-configs` could start immediately after the HelmRelease *object* is created, before MetalLB has actually finished deploying. The CRDs wouldn't exist yet and the config apply would fail.
+- **`interval`** — how often Flux re-applies this Kustomization, even if nothing has changed in git. This is the "drift detection" mechanism: if someone manually deletes a resource from the cluster, Flux will recreate it on the next interval cycle.
+- **`retryInterval`** — if a reconcile attempt fails, how long to wait before trying again.
+- **`timeout`** — if the reconcile hasn't completed within this time, treat it as failed.
+- **`sourceRef`** — which `GitRepository` object to fetch YAML from. All three point at `flux-system` — the GitRepository that tracks this repo, created by bootstrap.
+- **`path`** — the directory within the git repo to apply.
+- **`prune: true`** — if you delete a YAML file from the repo (and the corresponding resource disappears from the Kustomization's path), Flux will delete the resource from the cluster too. Without this, removing a file from git would leave the old resource orphaned in the cluster.
+
+**Why `dependsOn` is critical here:** `IPAddressPool` and `L2Advertisement` (in `configs/`) are custom resource types that are installed by the MetalLB Helm chart (in `controllers/`). If `configs/` were applied before MetalLB was installed, Kubernetes would reject the objects with `no matches for kind IPAddressPool`. `dependsOn` prevents this race condition by making `infra-configs` wait until `infra-controllers` reports healthy.
+
+**`wait: true` on `infra-controllers`** tells the kustomize-controller to wait until all resources — including the MetalLB HelmRelease — are fully healthy before marking this Kustomization as ready. Without `wait: true`, `infra-configs` could start immediately after the HelmRelease *object* is created in the cluster, before MetalLB has actually finished deploying and its CRDs are registered. The CRDs wouldn't exist yet and the config apply would fail.
 
 ---
 
@@ -726,13 +874,13 @@ spec:
   prune: true
 ```
 
-Apps depend on both `infra-controllers` and `infra-configs` because a `LoadBalancer` Service needs MetalLB to be running *and* an `IPAddressPool` to exist. If either is missing, MetalLB won't assign an IP and the Service will sit in `<pending>` forever.
+Apps depend on both `infra-controllers` and `infra-configs` because a `LoadBalancer` Service needs MetalLB to be running *and* an `IPAddressPool` to exist. MetalLB won't assign an IP from a pool that hasn't been defined yet — the Service will sit in `<pending>` forever if either is missing.
 
 ---
 
 ### `infrastructure/repositories/`
 
-Before the helm-controller can install a chart, the source-controller needs to know where to find it. `HelmRepository` objects are the GitOps equivalent of `helm repo add`.
+Before the helm-controller can install a chart, the source-controller needs to know where to find it. `HelmRepository` objects are the GitOps equivalent of running `helm repo add` — they tell Flux "here is a Helm chart repository URL, go check it for charts."
 
 **`jfrog.yaml`** — the chart repo for Artifactory:
 ```yaml
@@ -776,6 +924,8 @@ metadata:
 
 Although the HelmRelease has `install.createNamespace: true` as a safety net, declaring the namespace in git means Flux owns it and ensures it exists independently of the Helm install lifecycle.
 
+> **Why declare a Namespace in git if Helm can create it?** If Flux has `prune: true` and Helm owns the namespace (because Helm created it), then deleting the HelmRelease from git would also delete the namespace and everything inside it — including running pods. By declaring the namespace separately in git, Flux owns it directly, and it exists independently. You can delete and recreate the HelmRelease without losing the namespace.
+
 **`controllers/metallb/helmrelease.yaml`**
 ```yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
@@ -800,7 +950,7 @@ spec:
     crds: CreateReplace
 ```
 
-**`crds: CreateReplace`** is essential. Without it, Flux installs the CRDs on first install but never updates them when you bump the chart version. This leads to CRD/API drift and broken reconciliation as MetalLB evolves.
+**`crds: CreateReplace`** is essential. Without it, Flux installs the CRDs on first install but never updates them when you bump the chart version. As MetalLB releases new versions, its CRD schemas can evolve — if the CRDs are stale, new MetalLB features won't work, and in the worst case the old CRD schema will conflict with what the new MetalLB pods expect.
 
 ---
 
@@ -832,11 +982,19 @@ spec:
     - default    # must match IPAddressPool.metadata.name above
 ```
 
-**Layer2 mode** works by having one MetalLB speaker pod respond to ARP requests for any IP in the pool. Traffic arrives at that node and is forwarded to the Service — no BGP or router config required. It just works on a standard LAN.
+**`IPAddressPool`** tells MetalLB "you are allowed to assign addresses from this range to LoadBalancer Services." When a Service of type `LoadBalancer` is created, MetalLB picks an available IP from this pool and assigns it as the `EXTERNAL-IP`.
+
+**`L2Advertisement`** tells MetalLB to use **Layer 2 / ARP mode** to advertise those IPs.
+
+> **What is ARP?** ARP (Address Resolution Protocol) is how devices on a local network discover each other's hardware (MAC) addresses. When your laptop wants to send a packet to `192.168.56.200`, it first broadcasts a message to the whole subnet: "Who has IP 192.168.56.200? Tell me your MAC address." Normally, the device that owns that IP responds with its MAC address, and your laptop then sends the packet directly to that MAC address at the Ethernet level.
+>
+> **How does MetalLB use ARP?** When MetalLB assigns `192.168.56.200` to a LoadBalancer Service, it makes one of its **speaker pods** respond to ARP requests for that IP — even though `192.168.56.200` isn't a real IP configured on any physical network interface. The speaker pod says "I own that IP — send traffic here." Traffic then arrives at that node, where MetalLB forwards it to the appropriate Service backend pods. This works on any standard LAN without needing any router configuration.
+>
+> **What is Layer 2?** The network stack has multiple layers. Layer 1 is the physical medium (cables, WiFi signals). Layer 2 is the data link layer — this is where MAC addresses live and where Ethernet frames are sent between devices on the same local network. ARP operates at Layer 2. The alternative to Layer 2 mode is BGP mode, which operates at Layer 3 (the IP routing layer) and requires a BGP-capable router — overkill for a lab.
 
 The IP range must:
 - Be in the same subnet as the nodes (`192.168.56.0/24`)
-- Not overlap with your router/DHCP server's range
+- Not overlap with your router/DHCP server's range (to avoid IP conflicts)
 
 **Why CRDs, not a ConfigMap?** MetalLB dropped ConfigMap-based config entirely at v0.13. v0.15 only supports CRD-based config.
 
@@ -872,7 +1030,11 @@ spec:
     path: /mnt/data/artifactory-data      # must exist on the node (see Phase 2)
 ```
 
-**`storageClassName: ""`** is critical. If this field is absent or set to a real StorageClass name, Kubernetes will try dynamic provisioning instead of binding to this manually-defined PV. The empty string explicitly opts out of dynamic provisioning.
+**`persistentVolumeReclaimPolicy: Retain`** — when the PVC that's bound to this PV is deleted (e.g., when the Helm chart is uninstalled), the PV and its data are *not* deleted. They stay around, available to be reclaimed and rebound. The alternative, `Delete`, would delete the underlying storage — catastrophic for a database.
+
+**`storageClassName: ""`** is critical. If this field is absent or set to a real StorageClass name, Kubernetes will try dynamic provisioning instead of binding to this manually-defined PV.
+
+> **What is dynamic vs static provisioning?** In cloud environments, Kubernetes can automatically create storage volumes on demand (dynamic provisioning): when a PVC is created, a StorageClass instructs a storage provider to create and attach a real disk. In this lab, there's no storage provider — we've manually created the PV (static provisioning). The empty `storageClassName: ""` tells Kubernetes "don't use dynamic provisioning; bind to a manually-created PV that also has `storageClassName: ""`."
 
 **How PV binding works:** The Artifactory Helm chart creates a PVC requesting `20Gi`, `ReadWriteOnce`, and `storageClassName: ""`. Kubernetes searches for a PV matching all three criteria and binds them. If no matching PV exists, the PVC stays `Pending` and the pod never starts.
 
@@ -930,13 +1092,17 @@ spec:
       targetPath: postgresql.auth.postgresPassword
 ```
 
-**`interval: 5m`** means any manual `helm upgrade` on the cluster will be reverted within 5 minutes. This enforces the GitOps contract: all changes go through git, not the CLI.
+**`interval: 5m`** means any manual `helm upgrade` on the cluster will be reverted within 5 minutes. This enforces the GitOps contract: all changes go through git, not the CLI. If you run `helm upgrade` directly, Flux will overwrite your change on the next reconcile cycle.
 
-**`valuesFrom`** pulls values from a Kubernetes Secret and injects them into the Helm chart at the specified `targetPath`. This is how Flux passes sensitive config to a chart without putting secrets in git. The Secret `artifactory-db-credentials` must already exist in the `artifactory` namespace before the HelmRelease reconciles — create it manually as described in [Phase 2.2](#62-create-the-database-credentials-secret).
+**`valuesFrom`** pulls values from a Kubernetes Secret and injects them into the Helm chart at the specified `targetPath`. This is how Flux passes sensitive config to a chart without putting secrets in git.
+
+> **How does `valuesFrom` work?** Helm charts are configured via "values" — a hierarchical set of key-value pairs. Normally you'd write values directly in the HelmRelease YAML (e.g., `values: postgresql: auth: password: mypassword`). But that would put the password in git. Instead, `valuesFrom` says "fetch the value from this Secret, from this key within the Secret, and inject it into the chart at this path in the values hierarchy." The result is identical to writing the value inline, but the actual secret never appears in git.
+
+The Secret `artifactory-db-credentials` must already exist in the `artifactory` namespace before the HelmRelease reconciles — create it manually as described in [Phase 2.2](#62-create-the-database-credentials-secret).
 
 The two `targetPath` values map to the Bitnami PostgreSQL subchart's configuration:
-- `postgresql.auth.password` — the password for the `artifactory` database user
-- `postgresql.auth.postgresPassword` — the password for the `postgres` superuser
+- `postgresql.auth.password` — the password for the `artifactory` database user (used by the Artifactory application)
+- `postgresql.auth.postgresPassword` — the password for the `postgres` superuser (used for database administration)
 
 By pinning these here, every Flux reconcile passes the same credentials to Helm rather than letting the chart generate new random ones.
 
@@ -1049,6 +1215,8 @@ kubectl get pods -n artifactory
 # artifactory-oss-postgresql-0             1/1 Running
 ```
 
+> **What does `9/9` mean?** The format is `ready/total`. Artifactory is a complex application — the Helm chart deploys multiple processes inside the same pod as **sidecars** (containers that run alongside the main process, typically handling supporting functions like access control, metadata indexing, topology, etc.). `9/9` means all 9 containers in that pod are running and passing their readiness probes.
+
 **Check PVs are bound:**
 ```bash
 kubectl get pv
@@ -1083,6 +1251,8 @@ Check `REVISION` matches your latest git commit SHA. Flux polls every 1 minute. 
 flux reconcile source git flux-system -n flux-system
 ```
 
+> **What is a commit SHA?** Every git commit is identified by a SHA (Secure Hash Algorithm) — a 40-character hexadecimal fingerprint of the commit's contents. It looks like `da1bc2248f3a...`. When Flux shows a REVISION, it shows this SHA — you can compare it to `git log --oneline -1` to see if Flux has seen your latest push.
+
 ### A Kustomization is stuck READY=False
 
 ```bash
@@ -1107,12 +1277,16 @@ Or force a reconcile (also resets retries):
 flux reconcile helmrelease <name> -n <namespace> --with-source
 ```
 
+> **What does `--with-source` do?** It tells Flux to re-fetch the chart from the Helm repository before reconciling, rather than using its cached copy. Useful if you suspect the cached chart is stale.
+
 If the `flux` CLI isn't available, use `kubectl` annotations:
 
 ```bash
 kubectl annotate helmrelease <name> -n <namespace> \
   reconcile.fluxcd.io/requestedAt="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" --overwrite
 ```
+
+> **What is an annotation?** Kubernetes resources can have arbitrary key-value metadata attached called annotations. Some tools use specific annotation keys as signals — adding or updating the `reconcile.fluxcd.io/requestedAt` annotation is the equivalent of saying "please reconcile this right now" without needing the Flux CLI.
 
 ### PVC stuck in Pending
 
@@ -1134,14 +1308,18 @@ kubectl logs -n metallb-system -l app=metallb,component=speaker
 
 Common causes:
 - `infra-configs` applied before `infra-controllers` finished → wait for controllers, then `flux reconcile kustomization infra-configs -n flux-system`
-- IP range overlaps with your DHCP server
+- IP range overlaps with your DHCP server (your router would have already assigned that IP to another device — two devices claiming the same IP causes an IP conflict and neither works reliably)
 - `L2Advertisement.spec.ipAddressPools` name doesn't match `IPAddressPool.metadata.name`
 
 ### PostgreSQL password mismatch
 
 **Symptoms:** Multiple Artifactory sidecars (`topology`, `metadata`, `access`) in `CrashLoopBackOff`. Logs show `FATAL: password authentication failed for user "artifactory"`.
 
+> **What is CrashLoopBackOff?** When a container crashes immediately after starting, Kubernetes tries to restart it. If it keeps crashing, Kubernetes enters a "back-off" — it waits increasingly longer between restart attempts (1s, 2s, 4s, 8s... up to 5 minutes). During this state, the pod shows `CrashLoopBackOff`. It means "this container is repeatedly failing to start."
+
 **Cause:** The Bitnami PostgreSQL subchart generates a random password on every Helm install or upgrade. If the `artifactory-db-credentials` Secret is missing, Flux lets the chart manage its own secret (`artifactory-oss-postgresql`). On the next reconcile, the chart regenerates a new random value in that secret — but the PostgreSQL data directory was initialised with the original password. The two are now out of sync.
+
+> **Why can't PostgreSQL just use the new password?** PostgreSQL stores its user credentials *inside* the database files on disk. When the database was first initialised, it created a user `artifactory` with password X. Changing the Secret in Kubernetes doesn't change the password stored in the database files — that would require running a SQL command (`ALTER USER artifactory PASSWORD '...'`). Since the application can't connect (wrong password), it can't run that SQL command either. The only clean fix is to wipe the database and reinitialise it from scratch.
 
 **Diagnose:**
 ```bash
@@ -1154,6 +1332,8 @@ kubectl get secret artifactory-oss-postgresql -n artifactory \
 kubectl exec -n artifactory artifactory-oss-postgresql-0 -- \
   env PGPASSWORD=<password-from-above> psql -U artifactory -d artifactory -c "SELECT 1;"
 ```
+
+> **Why is the Secret value base64-encoded?** Kubernetes Secrets store values as base64. Base64 is an encoding scheme (not encryption) that converts binary data into a safe ASCII string. It's used here because Secret values can be arbitrary bytes — not necessarily valid UTF-8 text. The `python3` command decodes each base64 value back to readable text.
 
 **Fix:**
 
@@ -1171,6 +1351,8 @@ kubectl exec -n artifactory artifactory-oss-postgresql-0 -- \
    kubectl scale statefulset artifactory-oss-postgresql -n artifactory --replicas=0
    kubectl wait --for=delete pod/artifactory-oss-postgresql-0 -n artifactory --timeout=60s
    ```
+
+   > **What is a StatefulSet?** A StatefulSet is a Kubernetes workload type designed for stateful applications (databases, queues, etc.) that need stable network identities and persistent storage. Unlike a Deployment (where pods are interchangeable), StatefulSet pods have fixed names (`artifactory-oss-0`, `artifactory-oss-1`, etc.) and each gets its own PersistentVolumeClaim. Scaling to `--replicas=0` stops all pods in the StatefulSet without deleting it or its storage.
 
 3. Wipe the stale PostgreSQL data directory on whichever worker the postgres pod was running on (`kubectl get pods -n artifactory -o wide` to find the node):
    ```bash
@@ -1192,7 +1374,11 @@ kubectl exec -n artifactory artifactory-oss-postgresql-0 -- \
 
 ### Artifactory startup probe failures
 
-Artifactory takes 2–5 minutes to initialise from a cold start. Startup probe failures in the first few minutes are normal. Only investigate if they persist beyond 10 minutes:
+Artifactory takes 2–5 minutes to initialise from a cold start. Startup probe failures in the first few minutes are normal.
+
+> **What is a startup probe?** Kubernetes has three types of health checks for containers. A **startup probe** checks whether the application has finished starting up — Kubernetes won't send traffic to the container until the startup probe passes, and it won't start the other health checks (liveness and readiness probes) until then either. This is important for slow-starting apps like Artifactory: without a startup probe, the liveness probe would kick in too early, decide the app is dead, and restart it in a loop — preventing it from ever finishing startup.
+
+Only investigate if failures persist beyond 10 minutes:
 
 ```bash
 kubectl describe pod artifactory-oss-0 -n artifactory
@@ -1222,8 +1408,8 @@ The current `gotk-components.yaml` deploys four controllers: `source-controller`
 
 | Controller | Job |
 |---|---|
-| `image-reflector-controller` | Scans a container registry and fetches available image tags |
-| `image-automation-controller` | Commits updated image tags back to git |
+| `image-reflector-controller` | Scans a container registry and fetches the list of available image tags |
+| `image-automation-controller` | Commits updated image tags back to git, triggering a new deployment |
 
 ### Step 1: Re-bootstrap with extra components
 
@@ -1243,7 +1429,7 @@ This regenerates `gotk-components.yaml` with the two extra controllers and pushe
 
 For each image you want to track, create three objects under `apps/<appname>/`:
 
-**`image-repository.yaml`** — scan Artifactory for new tags:
+**`image-repository.yaml`** — tells Flux which container registry and image to scan for new tags:
 ```yaml
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageRepository
@@ -1257,7 +1443,7 @@ spec:
     name: artifactory-regcred
 ```
 
-**`image-policy.yaml`** — define which tag to select:
+**`image-policy.yaml`** — defines which tag to select from all available tags (e.g., latest semver, latest matching a pattern):
 ```yaml
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImagePolicy
@@ -1272,7 +1458,9 @@ spec:
       range: ">=1.0.0"
 ```
 
-**`image-update-automation.yaml`** — commit the selected tag back to git:
+> **What is semver?** Semver (Semantic Versioning) is a versioning convention: `MAJOR.MINOR.PATCH` (e.g., `1.4.2`). The policy `>=1.0.0` means "select the highest available tag that is version 1.0.0 or greater." Flux will automatically select `1.4.2` over `1.3.0` and commit the update to git.
+
+**`image-update-automation.yaml`** — commits the selected tag back to git, triggering Flux's normal reconcile flow:
 ```yaml
 apiVersion: image.toolkit.fluxcd.io/v1beta1
 kind: ImageUpdateAutomation
@@ -1312,4 +1500,4 @@ spec:
       tag: "1.0.0" # {"$imagepolicy": "flux-system:myapp:tag"}
 ```
 
-The `image-automation-controller` reads this marker, replaces the tag with whatever `ImagePolicy` selected, and commits the change. The `GitRepository` detects the new commit within 1 minute, the `apps` Kustomization reconciles, the HelmRelease upgrades — and the loop is complete.
+The `image-automation-controller` reads this marker comment, replaces the tag value with whatever `ImagePolicy` selected, and commits the change to git. The `GitRepository` detects the new commit within 1 minute, the `apps` Kustomization reconciles, the HelmRelease upgrades — and the loop is complete. A full push-to-deploy pipeline with no manual intervention.
