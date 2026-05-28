@@ -4,5 +4,6 @@ resources:
   - namespace.yaml
   - postgresql-pv.yaml
   - artifactory-pv.yaml
+  - sealed-artifactory-db-credentials.yaml
   # NOTE: Put this last when all dependencies are set
   - helmrelease.yaml
