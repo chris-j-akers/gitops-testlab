@@ -20,15 +20,18 @@ A complete guide to building this environment from scratch: provisioning the Kub
    - [5.7 Verify the Cluster](#57-verify-the-cluster)
 6. [Phase 2: Prepare Nodes for Applications](#6-phase-2-prepare-nodes-for-applications)
    - [6.1 Create hostPath directories](#61-create-hostpath-directories)
-   - [6.2 Create the database credentials Secret](#62-create-the-database-credentials-secret)
+   - [6.2 Storing Credentials Safely with SealedSecrets](#62-storing-credentials-safely-with-sealedsecrets)
+   - [6.3 Add the SealedSecrets Controller to the Repository](#63-add-the-sealedsecrets-controller-to-the-repository)
 7. [Phase 3: Bootstrap Flux (GitOps)](#7-phase-3-bootstrap-flux-gitops)
-8. [How GitOps Works Here](#8-how-gitops-works-here)
-9. [Repository Structure](#9-repository-structure)
-10. [File-by-File Reference](#10-file-by-file-reference)
-11. [How the Files Relate to Each Other](#11-how-the-files-relate-to-each-other)
-12. [Verification Commands](#12-verification-commands)
-13. [Troubleshooting](#13-troubleshooting)
-14. [Future: Image Tag Automation](#14-future-image-tag-automation)
+   - [7.1 Post-Bootstrap: Seal the Database Credentials](#71-post-bootstrap-seal-the-database-credentials)
+8. [Phase 4: Artifactory Deployment](#8-phase-4-artifactory-deployment)
+9. [How GitOps Works Here](#9-how-gitops-works-here)
+10. [Repository Structure](#10-repository-structure)
+11. [File-by-File Reference](#11-file-by-file-reference)
+12. [How the Files Relate to Each Other](#12-how-the-files-relate-to-each-other)
+13. [Verification Commands](#13-verification-commands)
+14. [Troubleshooting](#14-troubleshooting)
+15. [Future: Image Tag Automation](#15-future-image-tag-automation)
 
 ---
 
@@ -127,9 +130,20 @@ rm -rf ~/.kube
 
 The extra `rm -rf ~/.kube` removes your local kubeconfig — the file that tells `kubectl` where the cluster API server is and what credentials to use to connect. You'll regenerate this when you run `kubeadm init` again.
 
-### Delete the credentials Secret
+### Back up the SealedSecrets controller key
 
-The `artifactory-db-credentials` Secret is not in git, so `kubeadm reset` won't touch it — but it lives in the `artifactory` namespace which disappears with the cluster anyway. Nothing to do here; just remember to re-create it when you rebuild (Phase 2.2).
+With SealedSecrets, the `artifactory-db-credentials` Secret *is* in git (as an encrypted SealedSecret) — you don't need to recreate it manually after a rebuild. However, the SealedSecrets **controller's private key** lives only in the cluster and is lost when you reset. Without it, the controller cannot decrypt the SealedSecret you committed to git, and Artifactory won't be able to start.
+
+Back up the key before tearing down:
+
+```bash
+kubectl get secret \
+  -n sealed-secrets \
+  -l sealedsecrets.bitnami.com/sealed-secrets-key \
+  -o yaml > ~/sealed-secrets-master-key-backup.yaml
+```
+
+> **What are you backing up here?** The SealedSecrets controller stores its private key as a Kubernetes Secret in its own namespace. This command fetches all secrets labelled as sealed-secrets keys and saves them to a YAML file on your laptop. **Keep this file very secure and do not commit it to git** — anyone with this file can decrypt every SealedSecret you've ever committed. After rebuilding the cluster and bootstrapping Flux, restore it before the controller processes any SealedSecrets (see [Section 7.1](#71-post-bootstrap-seal-the-database-credentials)). If you lose the key, you will need to re-seal all secrets using the new controller's key.
 
 ### Clean up Flux from GitHub
 
@@ -538,7 +552,7 @@ sudo chmod 777 /mnt/data/postgres-data
 
 ---
 
-### 6.2 Create the database credentials Secret
+### 6.2 Storing Credentials Safely with SealedSecrets
 
 The Artifactory Helm chart includes a bundled PostgreSQL database. By default, the chart generates a **random password on every Helm install or upgrade**. Because Flux reconciles the HelmRelease on a regular interval (checking if the chart config matches what's in git and re-applying it if needed), this means the password in the cluster Secret gets silently replaced — while the on-disk PostgreSQL database still expects the original password. The result is `FATAL: password authentication failed` and every Artifactory sidecar crash-looping.
 
@@ -548,22 +562,129 @@ The Artifactory Helm chart includes a bundled PostgreSQL database. By default, t
 >
 > **What is RBAC?** RBAC stands for Role-Based Access Control. It's how Kubernetes controls who is allowed to do what. You define Roles (a set of permissions, e.g., "can read Secrets in namespace X") and bind them to ServiceAccounts or users. Flux, for example, has a ServiceAccount with RBAC rules that allow it to create and modify resources across the cluster.
 
-The fix is to create a Secret with **fixed** credentials and tell the HelmRelease to use them via `valuesFrom`. The Secret is created **imperatively** (a one-off manual command) and **never committed to git** — it is the one piece of state that lives only in the cluster.
+The fix is to use **fixed** credentials that you control and supply to the HelmRelease via `valuesFrom`. But this creates a challenge: you need to store those credentials somewhere safe. Putting plain passwords in a git repository — even a private one — is a security risk.
 
-> **What does "imperatively" mean?** Kubernetes supports two styles of interaction: **imperative** (you directly tell it what to do, e.g., `kubectl create secret ...`) and **declarative** (you describe the desired state in a YAML file and let Kubernetes figure out how to get there, e.g., `kubectl apply -f secret.yaml`). GitOps is entirely declarative. But secrets are a deliberate exception — putting passwords in git, even in a private repo, is a security risk. The `artifactory-db-credentials` Secret is therefore created imperatively and never written to a file.
+> **Why is a private git repo not safe for secrets?** Anything committed to git persists in the history forever. Even if you delete the file later, the password is still visible in the commit log. If the repository is ever made public, forked, backed up to a different system, or accessed via a developer's laptop that gets compromised, those credentials are exposed. Private repos also have access controls that can change — and many git hosting services' support staff have some level of read access. The rule of thumb: **never commit secrets to git in plain text.**
 
-Run this once from your laptop (or anywhere with `kubectl` access):
+This is where **SealedSecrets** comes in. SealedSecrets is a tool made by Bitnami Labs that lets you store *encrypted* secrets in git. The setup has two parts:
 
-```bash
-kubectl create secret generic artifactory-db-credentials \
-  -n artifactory \
-  --from-literal=password="<choose-a-strong-password>" \
-  --from-literal=postgresPassword="<choose-a-strong-postgres-password>"
+- **The controller** — a program that runs inside your Kubernetes cluster. It holds a private key and uses it to decrypt secrets. It watches for `SealedSecret` objects and automatically creates the corresponding regular Kubernetes `Secret` objects that your applications read.
+- **`kubeseal`** — a command-line tool you run on your laptop. It encrypts a plain Secret YAML file using the controller's *public* key (which is safe to share), producing a `SealedSecret` YAML file. Only the controller — the one holding the matching private key — can ever decrypt it.
+
+> **What is a public/private key pair?** This is the foundation of **asymmetric encryption**. Unlike a shared password (where both sides need the same secret to lock and unlock), a key pair has two complementary keys: a **public key** (safe to share with anyone) and a **private key** (kept secret and never shared). Data encrypted with the public key can *only* be decrypted by the matching private key. Think of the public key as a padlock you give to everyone — they can lock boxes with it, but only you, holding the unique key that fits that padlock, can ever open them. SealedSecrets uses this: your laptop encrypts with the public key, but only the cluster controller can decrypt with the private key.
+
+The result: you can commit the `SealedSecret` YAML to git without risk. Anyone who reads it sees only long strings of random-looking encrypted characters. Only your cluster's SealedSecrets controller can decrypt it back into the original secret.
+
+Here is the overall flow once everything is set up:
+
+```
+1. Controller starts in the cluster → generates a public/private key pair automatically
+2. You run `kubeseal --fetch-cert` to get the public key certificate from the controller
+3. You write a regular Secret YAML on your laptop (never applied to the cluster directly)
+4. You pipe that YAML through `kubeseal` → it produces a SealedSecret YAML with encrypted data
+5. You commit the SealedSecret YAML to git (safe — it is just encrypted bytes)
+6. Flux detects the new commit and applies the SealedSecret to the cluster
+7. The controller sees the new SealedSecret, decrypts it with its private key
+8. The controller creates a regular Kubernetes Secret in the cluster automatically
+9. Artifactory reads the Secret as normal — it has no idea SealedSecrets is involved
 ```
 
-> **These credentials are not stored in git.** If you tear down and rebuild the cluster you must re-run this command before bootstrapping Flux. If you lose the passwords, you will need to wipe the PostgreSQL data directory and reinitialise (see [Troubleshooting](#postgresql-password-mismatch)).
+Setting this up happens in two phases:
 
-The HelmRelease in `apps/artifactory/helmrelease.yaml` references this Secret via `valuesFrom` — see the [file reference](#appsartifactoryhelmreleaseyaml) for details.
+- **Section 6.3 (right now):** Add the SealedSecrets controller's Helm chart files to this git repository. The controller won't actually be installed yet — that happens when Flux bootstraps in Phase 3.
+- **Section 7.1 (after Phase 3):** Once the controller is running in the cluster, install `kubeseal` on your laptop, encrypt the database credentials, and commit the result to git.
+
+The HelmRelease in `apps/artifactory/helmrelease.yaml` references the credentials Secret via `valuesFrom` — see the [file reference](#appsartifactoryhelmreleaseyaml) for details on how that works.
+
+---
+
+### 6.3 Add the SealedSecrets Controller to the Repository
+
+The SealedSecrets controller is installed via Helm, exactly like MetalLB. You add its configuration to the git repository now, before the Flux bootstrap, so that Flux installs it automatically as part of the `infra-controllers` layer in Phase 3.
+
+> **Why does the SealedSecrets controller belong in `infrastructure/controllers/` alongside MetalLB?** The controller needs to be running *before* Flux tries to deploy Artifactory. This is because the `apps` layer applies both the `SealedSecret` (the encrypted credentials) and the Artifactory `HelmRelease` at roughly the same time. The SealedSecrets controller must be able to decrypt the SealedSecret and create the real `artifactory-db-credentials` Secret before (or very shortly before) the Helm controller tries to read it. Placing the SealedSecrets controller in `infrastructure/controllers/` — where `wait: true` and `dependsOn` ordering ensure the entire infra layer is healthy before the `apps` layer starts — guarantees this.
+
+**Step 1 — Add the Helm repository source.**
+
+This file tells Flux's source-controller where to find the SealedSecrets Helm chart (the equivalent of running `helm repo add`):
+
+`infrastructure/repositories/sealed-secrets.yaml`:
+```yaml
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: sealed-secrets
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: https://bitnami-labs.github.io/sealed-secrets
+```
+
+`infrastructure/repositories/kustomization.yaml` — add the new file to the list:
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - jfrog.yaml
+  - metallb.yaml
+  - sealed-secrets.yaml
+```
+
+**Step 2 — Add the Helm release for the controller.**
+
+`infrastructure/controllers/sealed-secrets/helmrelease.yaml`:
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sealed-secrets
+  namespace: sealed-secrets
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: sealed-secrets
+      version: "2.16.1"
+      sourceRef:
+        kind: HelmRepository
+        name: sealed-secrets
+        namespace: flux-system
+  install:
+    createNamespace: true
+  values:
+    fullnameOverride: sealed-secrets-controller
+```
+
+> **What does `fullnameOverride` do?** By default, Helm names chart resources by combining the release name with the chart name — which can produce something unwieldy like `sealed-secrets-sealed-secrets`. The `fullnameOverride` value tells the chart to use exactly the string `sealed-secrets-controller` as the name for the controller's Deployment and Service instead. This matters because the `kubeseal` CLI tool (which you'll use in Section 7.1 to encrypt secrets) looks for a Service named `sealed-secrets-controller` by default. Setting this value means you can use `kubeseal` commands without any extra flags to specify where to find the controller.
+>
+> **What does `createNamespace: true` do?** It tells the Helm chart to create the `sealed-secrets` namespace automatically if it doesn't already exist. Unlike MetalLB (where we declared the namespace in a separate `namespace.yaml` file), the SealedSecrets controller has no CRDs and no dependent configs, so there's no need to give it its own namespace file. Helm creating the namespace is fine.
+
+`infrastructure/controllers/sealed-secrets/kustomization.yaml`:
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - helmrelease.yaml
+```
+
+`infrastructure/controllers/kustomization.yaml` — add the new directory to the list:
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - metallb/
+  - sealed-secrets/
+```
+
+These files have already been created in this repository. **Commit and push them** before running the Flux bootstrap in Phase 3:
+
+```bash
+git add infrastructure/
+git commit -m "Add SealedSecrets controller to infrastructure"
+git push
+```
+
+When Flux bootstraps in Phase 3, it will install the SealedSecrets controller alongside MetalLB as part of the `infra-controllers` layer. Both will be healthy before the `apps` layer starts deploying Artifactory.
 
 ---
 
@@ -630,7 +751,305 @@ flux get kustomizations -A --watch
 
 ---
 
-## 8. How GitOps Works Here
+## 7.1 Post-Bootstrap: Seal the Database Credentials
+
+After Flux has bootstrapped and the `infra-controllers` layer is fully healthy, the SealedSecrets controller is running in the cluster. You can now encrypt the Artifactory database credentials and commit them to git.
+
+Verify the controller is running before continuing:
+
+```bash
+kubectl get pods -n sealed-secrets
+# NAME                                        READY   STATUS    RESTARTS
+# sealed-secrets-controller-<hash>            1/1     Running   0
+```
+
+### Install the `kubeseal` CLI
+
+`kubeseal` is the command-line tool that encrypts secrets. Install it on your laptop — wherever you run `kubectl` and `flux` commands from.
+
+```bash
+# macOS
+brew install kubeseal
+
+# Linux (download the binary directly)
+KUBESEAL_VERSION=$(curl -s https://api.github.com/repos/bitnami-labs/sealed-secrets/releases/latest \
+  | grep '"tag_name"' | cut -d '"' -f 4 | cut -c 2-)
+curl -OL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz"
+tar -xvzf "kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz" kubeseal
+sudo install -m 755 kubeseal /usr/local/bin/kubeseal
+```
+
+> **Why does the `kubeseal` version need to match the controller?** `kubeseal` and the controller must agree on the encryption format. Minor version differences are usually fine, but using a very old `kubeseal` with a new controller (or vice versa) can produce SealedSecrets the controller cannot decrypt. The commands above always download the latest release to match a freshly-installed controller.
+
+### Fetch the controller's public certificate
+
+`kubeseal` encrypts secrets using the controller's public certificate. Fetch it and save it locally — you will need this file every time you want to seal a new secret.
+
+```bash
+kubeseal --fetch-cert \
+  --controller-name=sealed-secrets-controller \
+  --controller-namespace=sealed-secrets \
+  > pub-sealed-secrets.pem
+```
+
+> **What is a `.pem` file?** PEM (Privacy-Enhanced Mail — yes, an old name) is a text-based format for cryptographic objects like certificates and keys. The file contains Base64-encoded data between `-----BEGIN CERTIFICATE-----` and `-----END CERTIFICATE-----` markers. It is just the controller's public key saved in a standard format that `kubeseal` understands.
+>
+> **Why save it to a file rather than fetching it on demand?** If the controller is restarted or the cluster is rebuilt, the certificate changes. Saving it to a file means you always encrypt with the certificate that *this specific cluster instance* can decrypt. Keep the `.pem` file alongside your local checkout but **do not commit it to git** — it is not a secret (it is a public key), but keeping it out of git avoids confusion. If you lose it, you can always re-run `--fetch-cert` from a running controller.
+
+### Create and commit the SealedSecret
+
+This is a two-step process: first generate the Secret YAML (without applying it to the cluster), then pipe it through `kubeseal` to produce the encrypted SealedSecret YAML.
+
+**Step 1 — Generate and encrypt in one command.**
+
+The `--dry-run=client -o yaml` flags tell `kubectl` to print what it *would* create as YAML without actually sending it to the cluster. That YAML is piped directly into `kubeseal`, which encrypts it and writes the result to a file:
+
+```bash
+kubectl create secret generic artifactory-db-credentials \
+  --namespace=artifactory \
+  --from-literal=password="<choose-a-strong-password>" \
+  --from-literal=postgresPassword="<choose-a-strong-postgres-password>" \
+  --dry-run=client -o yaml \
+| kubeseal \
+  --cert=pub-sealed-secrets.pem \
+  --format=yaml \
+  > apps/artifactory/sealed-artifactory-db-credentials.yaml
+```
+
+> **Why use `--dry-run=client` rather than applying the Secret first?** Because the whole point is that the plain-text password never touches the cluster — and never needs to. `--dry-run=client` generates the correctly-formatted Secret YAML locally, and `kubeseal` encrypts it before it ever reaches any API call. The plain-text password only exists briefly in your terminal session and is never written to disk in readable form.
+
+The output file will look something like this. The actual encrypted values are unique to your cluster and controller key — they will be long strings of random-looking characters:
+
+```yaml
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: artifactory-db-credentials
+  namespace: artifactory
+spec:
+  encryptedData:
+    password: AgBzK7LmXp...several hundred characters...
+    postgresPassword: AgA2k9mPRq...several hundred characters...
+  template:
+    metadata:
+      creationTimestamp: null
+      name: artifactory-db-credentials
+      namespace: artifactory
+```
+
+> **Why is the namespace inside the SealedSecret?** By default, a SealedSecret is bound to both its name and its namespace. The SealedSecrets controller will refuse to decrypt it if you try to apply it to a different namespace. This is a deliberate security feature — it prevents someone from copying a sealed credential from one application's namespace and using it in another. The `--namespace=artifactory` in the `kubectl create secret` command above ensures the resulting SealedSecret is locked to the `artifactory` namespace.
+
+**Step 2 — Add it to the kustomization list.**
+
+Edit `apps/artifactory/kustomization.yaml` to include the new file:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - postgresql-pv.yaml
+  - artifactory-pv.yaml
+  - sealed-artifactory-db-credentials.yaml
+  # NOTE: Put this last when all dependencies are set
+  - helmrelease.yaml
+```
+
+**Step 3 — Commit and push:**
+
+```bash
+git add apps/artifactory/sealed-artifactory-db-credentials.yaml
+git add apps/artifactory/kustomization.yaml
+git commit -m "Add sealed Artifactory database credentials"
+git push
+```
+
+Flux detects the new commit within 1 minute. Watch what happens:
+
+```bash
+# Watch the SealedSecrets controller decrypt it and create the real Secret
+kubectl get secret -n artifactory --watch
+
+# Once artifactory-db-credentials appears, watch the HelmRelease progress
+flux get helmrelease -n artifactory --watch
+```
+
+The sequence of events:
+1. `source-controller` detects the new commit and downloads it
+2. The `apps` Kustomization reconciles: applies the SealedSecret and the HelmRelease objects
+3. The SealedSecrets controller sees the new SealedSecret, decrypts it, and creates a regular `Secret` named `artifactory-db-credentials` in the `artifactory` namespace
+4. The helm-controller reconciles the HelmRelease; `valuesFrom` reads from `artifactory-db-credentials` and passes the credentials to Helm
+5. PostgreSQL initialises with your chosen passwords; Artifactory connects successfully
+
+> **What if the HelmRelease briefly shows a failure?** The SealedSecrets controller and the helm-controller may race — Helm might try to read `artifactory-db-credentials` a few seconds before the controller has finished creating it. This is normal. Flux retries failed HelmReleases automatically. Once the Secret exists (usually within seconds), the next retry will succeed and the HelmRelease will show `READY=True`. You do not need to intervene.
+
+### What happens when you rebuild the cluster?
+
+The SealedSecrets controller generates a **unique private key** when it first starts. If you tear down and rebuild the cluster, the new controller instance generates a **different** private key — and cannot decrypt the SealedSecret you committed to git (it was encrypted with the old key).
+
+There are two ways to handle this:
+
+**Option A — Restore the backed-up private key (recommended):**
+
+You backed up the controller's private key in Section 4 (Tear Down) before resetting. After rebuilding and re-bootstrapping Flux (Phases 1–3), restore it *before* the controller has a chance to create its own key:
+
+```bash
+# Scale the controller to zero so it stops running temporarily
+kubectl scale deployment sealed-secrets-controller -n sealed-secrets --replicas=0
+
+# Restore the backed-up key
+kubectl apply -f ~/sealed-secrets-master-key-backup.yaml
+
+# Scale back up — the controller loads the restored key on startup
+kubectl scale deployment sealed-secrets-controller -n sealed-secrets --replicas=1
+```
+
+The controller now holds the same private key as before and can decrypt your existing SealedSecrets from git.
+
+> **Why scale to zero first?** If the controller is already running when you restore the key, it may already have generated a new key of its own. Scaling down first ensures the controller isn't running during the restore, so when it starts back up it only sees your restored key and doesn't get confused by having two keys at once.
+
+**Option B — Re-seal all secrets after rebuild:**
+
+If you didn't back up the key (or prefer a clean slate), after the new controller is running:
+
+```bash
+# Fetch the new controller's public certificate
+kubeseal --fetch-cert \
+  --controller-name=sealed-secrets-controller \
+  --controller-namespace=sealed-secrets \
+  > pub-sealed-secrets.pem
+
+# Re-seal the credentials with the new key — you will need your original passwords
+kubectl create secret generic artifactory-db-credentials \
+  --namespace=artifactory \
+  --from-literal=password="<your-password>" \
+  --from-literal=postgresPassword="<your-postgres-password>" \
+  --dry-run=client -o yaml \
+| kubeseal \
+  --cert=pub-sealed-secrets.pem \
+  --format=yaml \
+  > apps/artifactory/sealed-artifactory-db-credentials.yaml
+
+git add apps/artifactory/sealed-artifactory-db-credentials.yaml
+git commit -m "Re-seal credentials with new controller key after cluster rebuild"
+git push
+```
+
+> **Why is Option A better?** To re-seal, you need to know the original passwords. If you only ever stored them in the SealedSecret and nowhere else, you are stuck — you would need to wipe the PostgreSQL data directory and start completely fresh (see [PostgreSQL password mismatch](#postgresql-password-mismatch)). The key backup avoids this situation entirely.
+
+---
+
+## 8. Phase 4: Artifactory Deployment
+
+After the Flux bootstrap in Phase 3, Flux begins reconciling the repository immediately. Within a few minutes it works through the dependency chain — registering the Helm repositories, installing MetalLB, configuring the IP pool — and then deploys Artifactory. You don't run any commands for this; it happens automatically.
+
+This section explains what Artifactory is, what gets deployed, and how to tell when it's up.
+
+---
+
+### What is Artifactory?
+
+Artifactory is a **universal artifact repository manager** — a centralised store for every kind of build output your software pipeline produces. Think of it as a private, self-hosted version of the public package registries you already use:
+
+| What you might store | Public equivalent |
+|---|---|
+| Docker container images | Docker Hub |
+| Helm charts | Artifact Hub / chart repos |
+| Maven JARs / WARs | Maven Central |
+| npm packages | npmjs.com |
+| Python packages | PyPI |
+| Raw binaries and files | — |
+
+In this lab, the primary use case is as a **private Docker registry** — a place to push images that your cluster can pull from, without relying on a public registry. The future image tag automation (Section 15) depends on images being pushed here.
+
+---
+
+### What Flux deploys
+
+The `artifactory-oss` Helm chart creates three StatefulSets (one per persistent component) plus supporting resources:
+
+| Pod | What it is | Why it exists |
+|---|---|---|
+| `artifactory-oss-0` | The main Artifactory application | The Java server that handles all repository operations — push, pull, search, permissions |
+| `artifactory-oss-artifactory-nginx-*` | An nginx reverse proxy | Sits in front of Artifactory as the external-facing entry point. This is the pod that gets the LoadBalancer IP (`192.168.56.200`) from MetalLB. All browser and Docker client traffic hits nginx first. |
+| `artifactory-oss-postgresql-0` | A PostgreSQL database | Stores Artifactory's metadata: repository configuration, user accounts, permissions, audit logs, and build information. The actual binary artifacts (images, packages) are stored on disk, not in the database. |
+
+> **Why nginx in front of Artifactory?** Artifactory itself listens on port 8082. nginx handles the "polished" external interface: it serves on standard ports (80/443), adds headers, handles TLS termination if configured, and provides Docker registry routing (Docker's registry protocol has specific URL patterns that nginx maps to Artifactory's internal paths). You interact with nginx — nginx proxies to Artifactory.
+
+> **Why is the Artifactory pod shown as `9/9`?** Artifactory OSS runs multiple **sidecar containers** inside a single pod. Each sidecar handles a specific internal service (e.g., `access` handles authentication, `metadata` handles package metadata APIs, `topology` tracks cluster node state, `router` handles inter-service routing). They all share the pod's network and storage. The `9/9` means all 9 containers in the pod are running and passing their readiness checks.
+
+---
+
+### Watch it come up
+
+After the Flux bootstrap completes, open two terminals and watch the deployment progress:
+
+**Terminal 1 — watch Flux Kustomizations work through the dependency chain:**
+```bash
+flux get kustomizations -A --watch
+```
+
+You'll see them flip to `READY=True` in order: `infra-repositories` first, then `infra-controllers` (this one takes a few minutes — it's waiting for MetalLB pods to become healthy), then `infra-configs`, then `apps`.
+
+**Terminal 2 — watch the Artifactory pods come up:**
+```bash
+kubectl get pods -n artifactory --watch
+```
+
+You'll see pods appear one by one. They'll initially show states like `Init:0/1`, `PodInitializing`, or `0/9` — this is normal. Artifactory initialises in stages:
+
+1. PostgreSQL starts first and initialises its database
+2. The main Artifactory pod starts, connects to PostgreSQL, and runs database migrations
+3. The sidecar containers start one by one as Artifactory's internal services come online
+4. nginx starts last, once Artifactory is ready to receive proxied requests
+
+**The whole process takes 5–10 minutes on a cold start.** Artifactory is a large Java application — it has a lot to initialise.
+
+---
+
+### Verify Artifactory is fully up
+
+```bash
+kubectl get pods -n artifactory
+```
+
+Expected output:
+```
+NAME                                           READY   STATUS    RESTARTS
+artifactory-oss-0                              9/9     Running   0
+artifactory-oss-artifactory-nginx-<hash>       1/1     Running   0
+artifactory-oss-postgresql-0                   1/1     Running   0
+```
+
+Check that MetalLB has assigned an external IP to the nginx Service:
+```bash
+kubectl get svc -n artifactory
+```
+
+Look for `artifactory-oss-artifactory-nginx` showing `EXTERNAL-IP: 192.168.56.200`. If it still shows `<pending>`, MetalLB hasn't assigned an IP yet — check `flux get kustomizations -A` to see if `infra-configs` is ready.
+
+---
+
+### First login
+
+Open a browser on any machine that can reach the `192.168.56.x` subnet:
+
+```
+http://192.168.56.200
+```
+
+Default credentials:
+```
+Username: admin
+Password: password
+```
+
+> Artifactory will immediately prompt you to change the admin password and run a setup wizard. Change the password. You can skip or dismiss the wizard for lab purposes — the repositories and settings you need can be configured later through the UI or API.
+
+---
+
+## 9. How GitOps Works Here
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -688,7 +1107,7 @@ In this repo, `clusters/lab/kustomization.yaml` is the first kind (a plain list)
 
 ---
 
-## 9. Repository Structure
+## 10. Repository Structure
 
 ```
 gitops-testlab/
@@ -707,12 +1126,16 @@ gitops-testlab/
 │   ├── repositories/                 # HelmRepository objects (like `helm repo add`)
 │   │   ├── jfrog.yaml
 │   │   ├── metallb.yaml
+│   │   ├── sealed-secrets.yaml
 │   │   └── kustomization.yaml
 │   │
 │   ├── controllers/                  # Helm charts that install controllers + their CRDs
 │   │   ├── kustomization.yaml
-│   │   └── metallb/
-│   │       ├── namespace.yaml
+│   │   ├── metallb/
+│   │   │   ├── namespace.yaml
+│   │   │   ├── helmrelease.yaml
+│   │   │   └── kustomization.yaml
+│   │   └── sealed-secrets/           # Bitnami SealedSecrets controller
 │   │       ├── helmrelease.yaml
 │   │       └── kustomization.yaml
 │   │
@@ -728,6 +1151,7 @@ gitops-testlab/
         ├── namespace.yaml
         ├── artifactory-pv.yaml
         ├── postgresql-pv.yaml
+        ├── sealed-artifactory-db-credentials.yaml  # created in Section 7.1 with kubeseal
         ├── helmrelease.yaml
         └── kustomization.yaml
 ```
@@ -752,7 +1176,7 @@ repositories/ ← controllers/ ← configs/
 
 ---
 
-## 10. File-by-File Reference
+## 11. File-by-File Reference
 
 ### `clusters/lab/flux-system/`
 
@@ -954,6 +1378,39 @@ spec:
 
 ---
 
+### `infrastructure/controllers/sealed-secrets/`
+
+The SealedSecrets controller is also installed via Helm. Unlike MetalLB, it does not install any CRDs that other layers depend on — it simply runs a controller that watches for `SealedSecret` objects and converts them into regular Kubernetes `Secret` objects.
+
+**`controllers/sealed-secrets/helmrelease.yaml`**
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sealed-secrets
+  namespace: sealed-secrets
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: sealed-secrets
+      version: "2.16.1"
+      sourceRef:
+        kind: HelmRepository
+        name: sealed-secrets
+        namespace: flux-system
+  install:
+    createNamespace: true
+  values:
+    fullnameOverride: sealed-secrets-controller
+```
+
+There is no `namespace.yaml` for sealed-secrets — `createNamespace: true` lets the Helm chart create the `sealed-secrets` namespace as part of installation. There are also no CRDs managed here (`crds: CreateReplace` is omitted) because the SealedSecrets chart registers its `SealedSecret` CRD as part of the chart itself and it never needs to be managed independently.
+
+The `fullnameOverride: sealed-secrets-controller` value ensures the controller's Deployment and Service are named `sealed-secrets-controller` inside the `sealed-secrets` namespace. This matches what the `kubeseal` CLI expects to find, so you can run `kubeseal --fetch-cert` without specifying extra `--controller-name` flags beyond `--controller-namespace sealed-secrets`.
+
+---
+
 ### `infrastructure/configs/`
 
 Config objects use the CRD types that were installed by the controllers layer. They cannot be applied before their CRDs exist — hence the `dependsOn` in `infrastructure.yaml`.
@@ -1064,6 +1521,30 @@ Same pattern as the Artifactory PV. The bundled PostgreSQL sub-chart creates a P
 
 ---
 
+**`apps/artifactory/sealed-artifactory-db-credentials.yaml`** — the encrypted database credentials
+
+This file is **generated by `kubeseal`** in Section 7.1 and then committed to git. It does not exist in the repository until you run through that section. It looks roughly like this (the actual encrypted values will be unique to your cluster):
+
+```yaml
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: artifactory-db-credentials
+  namespace: artifactory
+spec:
+  encryptedData:
+    password: AgBzK7LmXp...long encrypted string unique to your cluster...
+    postgresPassword: AgA2k9mPRq...long encrypted string unique to your cluster...
+  template:
+    metadata:
+      name: artifactory-db-credentials
+      namespace: artifactory
+```
+
+> **What happens when Flux applies this?** The `SealedSecret` is a custom resource type registered by the SealedSecrets controller. When the controller sees a new `SealedSecret` object appear in the cluster, it reads the `encryptedData` fields, decrypts them using its private key, and creates a standard Kubernetes `Secret` with the decrypted values — in this case, a Secret named `artifactory-db-credentials` in the `artifactory` namespace. The Artifactory HelmRelease then reads that Secret via `valuesFrom`, passing the credentials to Helm. The SealedSecret and the real Secret coexist in the cluster; the SealedSecret is the persistent GitOps-managed representation, and the real Secret is what applications actually use.
+
+---
+
 **`apps/artifactory/helmrelease.yaml`**
 ```yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
@@ -1108,7 +1589,7 @@ By pinning these here, every Flux reconcile passes the same credentials to Helm 
 
 ---
 
-## 11. How the Files Relate to Each Other
+## 12. How the Files Relate to Each Other
 
 ### The reconciliation chain
 
@@ -1143,6 +1624,10 @@ infra-controllers  [waits for: infra-repositories]
          → helm-controller installs MetalLB chart
               → MetalLB pods running
               → CRDs installed: IPAddressPool, L2Advertisement, etc.
+    → HelmRelease "sealed-secrets"
+         → helm-controller installs sealed-secrets chart
+              → SealedSecrets controller running in "sealed-secrets" namespace
+              → Can now decrypt SealedSecret objects into real Secrets
 
 infra-configs  [waits for: infra-controllers + wait:true]
   path: ./infrastructure/configs
@@ -1154,8 +1639,12 @@ apps  [waits for: infra-controllers + infra-configs]
     → Namespace "artifactory"
     → PersistentVolume "artifactory-pv-0"
     → PersistentVolume "postgres-pv-0"
+    → SealedSecret "artifactory-db-credentials"
+         → sealed-secrets-controller decrypts it
+              → Secret "artifactory-db-credentials" created in "artifactory" namespace
     → HelmRelease "artifactory-oss"
-         → helm-controller installs artifactory-oss chart
+         → helm-controller reads Secret via valuesFrom
+         → installs artifactory-oss chart with fixed credentials
               → PVCs bound to PVs above
               → Service "artifactory-oss-artifactory-nginx" (type: LoadBalancer)
                    → MetalLB assigns 192.168.56.200
@@ -1178,7 +1667,7 @@ If any of these get out of sync, things silently break:
 
 ---
 
-## 12. Verification Commands
+## 13. Verification Commands
 
 Run these after a rebuild to confirm everything is healthy. `flux` commands can run from your laptop or from `cakers-cp-1`.
 
@@ -1237,7 +1726,7 @@ Default credentials: admin / password  (change immediately after first login)
 
 ---
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 ### Flux hasn't picked up a push
 
@@ -1372,6 +1861,37 @@ kubectl exec -n artifactory artifactory-oss-postgresql-0 -- \
      "flux reconcile helmrelease artifactory-oss -n artifactory --with-source"
    ```
 
+### SealedSecret not being decrypted
+
+**Symptoms:** The `artifactory-db-credentials` Secret does not appear after Flux applies the SealedSecret. Artifactory pods fail to start because the Secret doesn't exist.
+
+Check the controller logs — it will usually print exactly why it refused to decrypt:
+
+```bash
+kubectl logs -n sealed-secrets -l app.kubernetes.io/instance=sealed-secrets --tail=50
+```
+
+Common causes:
+
+- **Controller generated a new key after cluster rebuild** — the SealedSecret was encrypted with the old private key and the new controller cannot decrypt it. Re-seal the credentials using the new key (see [Section 7.1 — What happens when you rebuild the cluster?](#71-post-bootstrap-seal-the-database-credentials)).
+- **Namespace mismatch** — a SealedSecret is namespace-scoped; it can only be decrypted in the namespace specified in its `metadata.namespace`. Check that the SealedSecret has `namespace: artifactory`, not `namespace: default` or something else.
+- **`kubeseal` version mismatch with controller** — re-install `kubeseal` to match the controller version (check `kubectl get deployment -n sealed-secrets -o jsonpath='{.items[0].spec.template.spec.containers[0].image}'` for the controller image tag).
+
+### SealedSecrets controller HelmRelease stuck
+
+If `flux get helmrelease -n sealed-secrets` shows an error or the controller pod never appears:
+
+```bash
+kubectl describe helmrelease -n sealed-secrets sealed-secrets
+kubectl get events -n sealed-secrets
+```
+
+The most common cause is the `sealed-secrets` HelmRepository not yet being ready — check `flux get sources helm -n flux-system`. If `infra-repositories` hasn't reconciled yet, wait for it or force it:
+
+```bash
+flux reconcile kustomization infra-repositories -n flux-system
+```
+
 ### Artifactory startup probe failures
 
 Artifactory takes 2–5 minutes to initialise from a cold start. Startup probe failures in the first few minutes are normal.
@@ -1398,7 +1918,7 @@ If the Flannel pod on that node is `CrashLoopBackOff`, check it wasn't already c
 
 ---
 
-## 14. Future: Image Tag Automation
+## 15. Future: Image Tag Automation
 
 The goal: push a new image to Artifactory → Flux detects the new tag → updates the image tag in a HelmRelease → auto-deploys.
 

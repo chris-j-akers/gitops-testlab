@@ -1,3 +1,1 @@
-You generated the README.md file for me last time but I don't feel it's ELI5 enough. There are terms that are not fully explained. As an example, section 5.1 contains references to iptables needing to see bridged traffic. These terms should also be explained clearly.
-
-Can you go through the document and update it so it's as ELI5 as possible. You can't explain enough. I am an engineer, but I would like to understand why I'm carrying out certain commands.
+I want you to update the runbook so that it describes how to store any credentials or passwords as Bitnami SealedSecrets including installed SealedSecrets controller and anything else required. Remember to keep it all ELI5 and explain as much as you can in keeping with the reset of the documentation.
