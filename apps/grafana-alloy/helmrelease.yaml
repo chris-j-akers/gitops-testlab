@@ -7,8 +7,7 @@ spec:
   interval: 5m
   chart:
     spec:
-      chart: artifactory-oss
-      version: "107.133.12"
+      chart: grafana/alloy
       sourceRef:
         kind: HelmRepository
         name: grafana-alloy
