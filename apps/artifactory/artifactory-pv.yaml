@@ -12,4 +12,12 @@ spec:
   storageClassName: ""   # MUST be empty
   hostPath:
     path: /mnt/data/artifactory-data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - cakers-worker-1.lab.local
 

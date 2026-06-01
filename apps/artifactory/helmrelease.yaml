@@ -13,6 +13,14 @@ spec:
         kind: HelmRepository
         name: jfrog
         namespace: flux-system
+  values:
+    artifactory:
+      nodeSelector:
+        kubernetes.io/hostname: cakers-worker-1.lab.local
+    postgresql:
+      primary:
+        nodeSelector:
+          kubernetes.io/hostname: cakers-worker-2.lab.local
   valuesFrom:
     - kind: Secret
       name: artifactory-db-credentials

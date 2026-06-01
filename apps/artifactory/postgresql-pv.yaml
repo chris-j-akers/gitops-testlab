@@ -12,44 +12,11 @@ spec:
   storageClassName: ""
   hostPath:
     path: /mnt/data/postgres-data
-
-
-# TO MATCH: 
-
-# Storage: 200Gi
-# AccessMode: ReadWriteOnce
-# VolumeMode: Filesystem
-# StorageClassName: "" (empty — meaning manual PV only)
-
-# ➜ kubectl get pvc data-artifactory-oss-postgresql-0 -n artifactory -o yaml   
-# apiVersion: v1
-# kind: PersistentVolumeClaim
-# metadata:
-#   annotations:
-#     pv.kubernetes.io/bind-completed: "yes"
-#     pv.kubernetes.io/bound-by-controller: "yes"
-#   creationTimestamp: "2026-03-04T16:07:56Z"
-#   finalizers:
-#   - kubernetes.io/pvc-protection
-#   labels:
-#     app.kubernetes.io/component: primary
-#     app.kubernetes.io/instance: artifactory-oss
-#     app.kubernetes.io/name: postgresql
-#   name: data-artifactory-oss-postgresql-0
-#   namespace: artifactory
-#   resourceVersion: "47235"
-#   uid: a66dafde-3a59-4898-9224-007155560b43
-# spec:
-#   accessModes:
-#   - ReadWriteOnce
-#   resources:
-#     requests:
-#       storage: 200Gi
-#   volumeMode: Filesystem
-#   volumeName: postgres-pv-0
-# status:
-#   accessModes:
-#   - ReadWriteOnce
-#   capacity:
-#     storage: 200Gi
-#   phase: Bound
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - cakers-worker-2.lab.local

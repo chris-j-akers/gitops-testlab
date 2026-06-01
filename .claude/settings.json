@@ -51,7 +51,15 @@
       "Bash(ssh kubeadmin@cakers-cp-1 'flux reconcile kustomization infra-controllers --with-source && flux get kustomizations -A')",
       "Bash(ssh kubeadmin@cakers-cp-1 'flux get kustomizations -A && echo \"---\" && flux get helmreleases -A')",
       "Bash(ssh kubeadmin@cakers-cp-1 'kubectl get sealedsecret,secret -n artifactory 2>&1')",
-      "Bash(ssh kubeadmin@cakers-cp-1 'kubectl get all -n sealed-secrets && echo \"---\" && kubectl describe helmrelease sealed-secrets -n sealed-secrets 2>&1')"
+      "Bash(ssh kubeadmin@cakers-cp-1 'kubectl get all -n sealed-secrets && echo \"---\" && kubectl describe helmrelease sealed-secrets -n sealed-secrets 2>&1')",
+      "Bash(ssh kubeadmin@cakers-cp-1 'kubectl get all -n artifactory && echo \"---\" && flux get helmreleases -n flux-system')",
+      "Bash(ssh kubeadmin@cakers-cp-1 'flux get helmreleases -A && echo \"---\" && kubectl get sealedsecret,secret -n artifactory')",
+      "Bash(ssh kubeadmin@cakers-cp-1 'flux reconcile helmrelease artifactory-oss -n artifactory --timeout=3m')",
+      "Bash(ssh kubeadmin@cakers-cp-1 'kubectl get pods -n artifactory')",
+      "Bash(curl -sL https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml -o /home/cakers/src/gitops-testlab/infrastructure/controllers/flannel/kube-flannel.yaml)",
+      "Bash(kubectl kustomize *)",
+      "Bash(grep -A 5 'kube-flannel$')",
+      "Bash(grep -A 5 'name: kube-flannel$')"
     ]
   }
 }
