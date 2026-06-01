@@ -16,4 +16,6 @@ spec:
   values:
     alloy:
       configMap:
-        create: true
+        create: false
+        name: grafana-alloy-config
+
