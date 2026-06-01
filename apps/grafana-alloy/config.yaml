@@ -5,5 +5,5 @@ metadata:
   namespace: grafana-alloy
 data:
   logging:
-    level = "info"
-    format = "logfmt"
+    level: "info"
+    format: "logfmt"
