@@ -13,5 +13,7 @@ spec:
         kind: HelmRepository
         name: grafana-alloy
         namespace: grafana-alloy
-
-
+  values:
+    alloy:
+      configMap:
+        create: true
