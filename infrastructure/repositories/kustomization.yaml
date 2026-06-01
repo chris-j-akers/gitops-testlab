@@ -3,4 +3,5 @@ kind: Kustomization
 resources:
   - jfrog.yaml
   - metallb.yaml
+  - grafana-alloy.yaml
   - sealed-secrets.yaml
