@@ -9,3 +9,6 @@ data:
       level  = "info"
       format = "logfmt"
     }
+    http {
+        listen_addr = "0.0.0.0:12345"
+    }
