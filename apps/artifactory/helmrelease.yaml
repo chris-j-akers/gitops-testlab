@@ -16,8 +16,6 @@ spec:
   values:
     artifactory:
       artifactory:
-        masterKey: "aad4284d540760aa4c5353ab2b49ca3a7f07f09f9598ca778258c27f558881ad"
-        joinKey: "57c7180be5eced7b4cf386ca1ae30ac3b3d12a9cbe249a5bcb8421ee5b926f5f"
         nodeSelector:
           kubernetes.io/hostname: cakers-worker-1.lab.local
       postgresql:
@@ -26,11 +24,18 @@ spec:
             kubernetes.io/hostname: cakers-worker-2.lab.local
   valuesFrom:
     - kind: Secret
-      name: artifactory-db-credentials
-      valuesKey: password
+      name: artifactory-secrets
+      valuesKey: artifactoryPassword
       targetPath: artifactory.postgresql.auth.password
     - kind: Secret
-      name: artifactory-db-credentials
+      name: artifactory-secrets
       valuesKey: postgresPassword
       targetPath: artifactory.postgresql.auth.postgresPassword
-
+    - kind: Secret
+      name: artifactory-secrets
+      valuesKey: artifactoryMasterKey
+      targetPath: artifactory.artifactory.masterKey
+    - kind: Secret
+      name: artifactory-secrets
+      valuesKey: artifactoryJoinKey
+      targetPath: artifactory.artifactory.joinKey      
