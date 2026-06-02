@@ -15,12 +15,15 @@ spec:
         namespace: flux-system
   values:
     artifactory:
-      nodeSelector:
-        kubernetes.io/hostname: cakers-worker-1.lab.local
-    postgresql:
-      primary:
+      artifactory:
+        masterKey: "aad4284d540760aa4c5353ab2b49ca3a7f07f09f9598ca778258c27f558881ad"
+        joinKey: "57c7180be5eced7b4cf386ca1ae30ac3b3d12a9cbe249a5bcb8421ee5b926f5f"
         nodeSelector:
-          kubernetes.io/hostname: cakers-worker-2.lab.local
+          kubernetes.io/hostname: cakers-worker-1.lab.local
+      postgresql:
+        primary:
+          nodeSelector:
+            kubernetes.io/hostname: cakers-worker-2.lab.local
   valuesFrom:
     - kind: Secret
       name: artifactory-db-credentials
