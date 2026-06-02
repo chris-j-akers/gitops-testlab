@@ -82,7 +82,12 @@
       "Bash(git -C /home/cakers/src/gitops-testlab push)",
       "Bash(git -C /home/cakers/src/gitops-testlab status)",
       "Bash(python3 -c \"import sys,json,base64; d=json.load\\(sys.stdin\\); [print\\(k,'=',base64.b64decode\\(v\\).decode\\(\\)\\) for k,v in d.items\\(\\)]\")",
-      "Bash(curl -s \"https://raw.githubusercontent.com/jfrog/charts/refs/tags/artifactory-oss-107.133.12/stable/artifactory/values.yaml\")"
+      "Bash(curl -s \"https://raw.githubusercontent.com/jfrog/charts/refs/tags/artifactory-oss-107.133.12/stable/artifactory/values.yaml\")",
+      "Bash(kubeseal --fetch-cert --controller-name=sealed-secrets-controller --controller-namespace=sealed-secrets)",
+      "Bash(openssl x509 *)",
+      "Bash(ssh kubadmin@cakers-cp-1 'ls -la ~')",
+      "Bash(ssh kubeadmin@cakers-cp-1 'ls -la ~')",
+      "Bash(ssh kubeadmin@cakers-cp-1 'cat ~/apps-artifactory-db-credentials.yaml; echo \"---\"; cat ~/apps-artifactory-join-key.yaml; echo \"---\"; cat ~/apps-artifactory-master-key.yaml')"
     ]
   }
 }
