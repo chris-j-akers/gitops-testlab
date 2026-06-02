@@ -14,7 +14,7 @@ data:
 
     prometheus.scrape "scrape_metrics" {
       targets         = prometheus.exporter.unix.local_system.targets
-      forward_to      = [prometheus.relabel.metrics_service.receiver]
+      forward_to      = [prometheus.remote_write.metrics_service]
       scrape_interval = "10s"
     }
 
