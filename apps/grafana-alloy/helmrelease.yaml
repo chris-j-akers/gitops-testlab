@@ -18,4 +18,6 @@ spec:
       configMap:
         create: false
         name: grafana-alloy-config
+    service:
+      type: LoadBalancer
 

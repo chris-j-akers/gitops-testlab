@@ -1021,8 +1021,7 @@ artifactory-oss-0                              9/9     Running   0
 artifactory-oss-artifactory-nginx-<hash>       1/1     Running   0
 artifactory-oss-postgresql-0                   1/1     Running   0
 ```
-
-Check that MetalLB has assigned an external IP to the nginx Service:
+ 
 ```bash
 kubectl get svc -n artifactory
 ```
