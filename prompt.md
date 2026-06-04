@@ -1,1 +1,0 @@
-I want you to update the runbook so that it describes how to store any credentials or passwords as Bitnami SealedSecrets including installed SealedSecrets controller and anything else required. Remember to keep it all ELI5 and explain as much as you can in keeping with the reset of the documentation.
