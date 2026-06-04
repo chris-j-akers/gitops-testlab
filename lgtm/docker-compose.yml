@@ -1,0 +1,74 @@
+services:
+  mimir:
+    image: grafana/mimir:2.15.0
+    container_name: mimir
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./config/mimir:/etc/mimir:ro
+      - mimir-data:/data
+    ports:
+      - "9009:9009"   # HTTP API + remote_write endpoint
+    networks:
+      - lgtm
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./config/loki:/etc/loki:ro
+      - loki-data:/data
+    ports:
+      - "3100:3100"   # HTTP API + push endpoint
+    networks:
+      - lgtm
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    container_name: tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./config/tempo:/etc/tempo:ro
+      - tempo-data:/data
+    ports:
+      - "3200:3200"   # HTTP API + query endpoint
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    networks:
+      - lgtm
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    container_name: grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor metricsSummary
+      - GF_SERVER_ROOT_URL=http://${MONITORING_VM_IP:-localhost}:3000
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - lgtm
+    depends_on:
+      - mimir
+      - loki
+      - tempo
+    restart: unless-stopped
+
+volumes:
+  mimir-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
+
+networks:
+  lgtm:
+    driver: bridge

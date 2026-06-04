@@ -97,7 +97,15 @@
       "Bash(xargs ls -la)",
       "Bash(ssh kubeadmin@cakers-worker-1.lab.local \"ls -la /mnt/data/\")",
       "Bash(ssh kubeadmin@cakers-worker-2.lab.local \"ls -la /mnt/data/\")",
-      "Bash(awk '{print $1}')"
+      "Bash(awk '{print $1}')",
+      "Bash(ls -la /home/cakers/src/gitops-lab-lgtm-stack/)",
+      "Read(//home/cakers/src/gitops-lab-lgtm-stack/**)",
+      "Bash(mkdir kubernetes *)",
+      "Bash(git mv *)",
+      "Bash(git -C /home/cakers/src/gitops-testlab status --short)",
+      "Bash(mkdir -p /home/cakers/src/gitops-testlab/kubernetes/keys)",
+      "Bash(touch /home/cakers/src/gitops-testlab/kubernetes/keys/.gitkeep)",
+      "Bash(rsync -a --exclude='.git' --exclude='.claude' /home/cakers/src/gitops-lab-lgtm-stack/ /home/cakers/src/gitops-testlab/lgtm/)"
     ]
   }
 }
