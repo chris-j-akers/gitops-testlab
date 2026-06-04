@@ -1,1 +1,3 @@
-A test repository to get a gitops/flux workflow running end to end.
+A test repository to get a gitops/flux workflow running end to end using Virtual Box VMs.
+
+
