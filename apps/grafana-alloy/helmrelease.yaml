@@ -18,6 +18,19 @@ spec:
       configMap:
         create: false
         name: grafana-alloy-config
+    controller:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      affinity:          
+        nodeAffinity:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - cakers-cp-1.lab.local          
     service:
       type: LoadBalancer
 

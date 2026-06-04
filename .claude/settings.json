@@ -92,7 +92,12 @@
       "Bash(git -C /home/cakers/src/gitops-testlab log --oneline -3)",
       "Bash(python3 -c ' *)",
       "Bash(grep -v \"^$\")",
-      "Bash(git -C /home/cakers/src/gitops-testlab diff --cached)"
+      "Bash(git -C /home/cakers/src/gitops-testlab diff --cached)",
+      "Bash(flux get *)",
+      "Bash(xargs ls -la)",
+      "Bash(ssh kubeadmin@cakers-worker-1.lab.local \"ls -la /mnt/data/\")",
+      "Bash(ssh kubeadmin@cakers-worker-2.lab.local \"ls -la /mnt/data/\")",
+      "Bash(awk '{print $1}')"
     ]
   }
 }
