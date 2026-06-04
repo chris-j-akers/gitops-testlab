@@ -89,7 +89,10 @@
       "Bash(ssh kubeadmin@cakers-cp-1 'ls -la ~')",
       "Bash(ssh kubeadmin@cakers-cp-1 'cat ~/apps-artifactory-db-credentials.yaml; echo \"---\"; cat ~/apps-artifactory-join-key.yaml; echo \"---\"; cat ~/apps-artifactory-master-key.yaml')",
       "Bash(git -C /home/cakers/src/gitops-testlab diff --stat)",
-      "Bash(git -C /home/cakers/src/gitops-testlab log --oneline -3)"
+      "Bash(git -C /home/cakers/src/gitops-testlab log --oneline -3)",
+      "Bash(python3 -c ' *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(git -C /home/cakers/src/gitops-testlab diff --cached)"
     ]
   }
 }
