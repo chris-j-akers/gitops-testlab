@@ -5,7 +5,7 @@ services:
     command: ["-config.file=/etc/mimir/mimir.yaml"]
     volumes:
       - ./config/mimir:/etc/mimir:ro
-      - mimir-data:/data
+      - ./data/mimir:/data
     ports:
       - "9009:9009"   # HTTP API + remote_write endpoint
     networks:
@@ -18,7 +18,7 @@ services:
     command: ["-config.file=/etc/loki/loki.yaml"]
     volumes:
       - ./config/loki:/etc/loki:ro
-      - loki-data:/data
+      - ./data/loki:/data
     ports:
       - "3100:3100"   # HTTP API + push endpoint
     networks:
@@ -31,7 +31,7 @@ services:
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
       - ./config/tempo:/etc/tempo:ro
-      - tempo-data:/data
+      - ./data/tempo:/data
     ports:
       - "3200:3200"   # HTTP API + query endpoint
       - "4317:4317"   # OTLP gRPC
@@ -48,11 +48,11 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
       - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor metricsSummary
-      - GF_SERVER_ROOT_URL=http://${MONITORING_VM_IP:-localhost}:3000
+      - GF_SERVER_ROOT_URL=http://${HOST_IP:-localhost}:3000
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana-data:/var/lib/grafana
+      - ./data/grafana:/var/lib/grafana
     ports:
       - "3000:3000"
     networks:
@@ -62,12 +62,6 @@ services:
       - loki
       - tempo
     restart: unless-stopped
-
-volumes:
-  mimir-data:
-  loki-data:
-  tempo-data:
-  grafana-data:
 
 networks:
   lgtm:

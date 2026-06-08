@@ -7,7 +7,7 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$ROOT_DIR"
 
 if [[ ! -f .env ]]; then
-  echo "ERROR: .env not found. Copy .env.example to .env and set MONITORING_VM_IP."
+  echo "ERROR: .env not found. Copy .env.example to .env and set HOST_IP."
   exit 1
 fi
 
@@ -30,4 +30,4 @@ echo "  Mimir:    http://localhost:9009  (remote_write to /api/v1/push)"
 echo "  Loki:     http://localhost:3100  (push to /loki/api/v1/push)"
 echo "  Tempo:    http://localhost:3200  (OTLP gRPC :4317 / HTTP :4318)"
 echo ""
-echo "From the cluster, replace 'localhost' with: $(grep MONITORING_VM_IP .env | cut -d= -f2)"
+echo "From the cluster, replace 'localhost' with: $(grep HOST_IP .env | cut -d= -f2)"
