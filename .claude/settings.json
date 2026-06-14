@@ -105,7 +105,11 @@
       "Bash(git -C /home/cakers/src/gitops-testlab status --short)",
       "Bash(mkdir -p /home/cakers/src/gitops-testlab/kubernetes/keys)",
       "Bash(touch /home/cakers/src/gitops-testlab/kubernetes/keys/.gitkeep)",
-      "Bash(rsync -a --exclude='.git' --exclude='.claude' /home/cakers/src/gitops-lab-lgtm-stack/ /home/cakers/src/gitops-testlab/lgtm/)"
+      "Bash(rsync -a --exclude='.git' --exclude='.claude' /home/cakers/src/gitops-lab-lgtm-stack/ /home/cakers/src/gitops-testlab/lgtm/)",
+      "Read(//etc/apt/keyrings/**)",
+      "Read(//etc/apt/sources.list.d/**)",
+      "Bash(dpkg -l)",
+      "WebFetch(domain:docs.docker.com)"
     ]
   }
 }

@@ -39,7 +39,7 @@ blocks_storage:
     dir: /data/mimir/blocks
   tsdb:
     dir: /data/mimir/tsdb
-    retention_period: 7d
+    retention_period: 168h
 
 ruler:
   rule_path: /data/mimir/ruler-tmp

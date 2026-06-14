@@ -2,3 +2,4 @@ get-kustomizations.py
 kustomizations_combined.txt
 *.pdf
 RUNBOOK.md
+lgtm/data/
