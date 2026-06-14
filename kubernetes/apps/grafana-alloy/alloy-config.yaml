@@ -18,7 +18,7 @@ data:
       }]
     }
 
-    local.source.file "system" {
+    loki.source.file "system" {
       path_targets    = local.file_match.system.targets
       forward_to      = [lokie.write.default.receiver]
       legacy_positions_file = "/tmp/positions.yaml"
