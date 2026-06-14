@@ -23,5 +23,5 @@
     [ ] Release process to auto-deploy Python app to Artificatory
     [ ] Adjust flux to auto-deploy specific versions in chart
 [ ] Alert manager set-up and forwarding alert (to email)
-[ ] Bayler configured in cluster
+[ ] Beyler configured in cluster
 ```
