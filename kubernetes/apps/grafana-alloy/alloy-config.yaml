@@ -25,7 +25,7 @@ data:
 
     loki.write "default" {
       endpoint {
-        url = "https://192.168.1.187:3100/loki/api/v1/push"
+        url = "http://192.168.1.187:3100/loki/api/v1/push"
       }
       external_labels = {}
     }  
