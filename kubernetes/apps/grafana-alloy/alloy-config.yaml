@@ -9,3 +9,24 @@ data:
       level  = "info"
       format = "logfmt"
     }
+
+    local.file_match "system" {
+      path_targets = [{
+        __address__ = "localhost",
+        __path__    = "/var/log/*log",
+        job = "varlogs",
+      }]
+    }
+
+    local.source.file "system" {
+      path_targets    = local.file_match.system.targets
+      forward_to      = [lokie.write.default.receiver]
+      legacy_positions_file = /tmp/positions.yaml"
+    }
+
+    loki.write "default" {
+      endpoint {
+        url = "https://192.168.1.187:3100/loki/api/v1/push"
+      }
+      external_labels = {}
+    }  
