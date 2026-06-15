@@ -18,6 +18,8 @@
 [X] Flux deployed and hooked up to ssh://git@github.com/chris-j-akers/gitops-testlab
 [X] Grafana Alloy installed
 [X] LGTM stack configured outside cluster
+    [X] Loki configured to collect from K8s logs
+    [X] Prom metrics collect and sending to Mimir
 [X] Artifactory deployed
 [ ] Python app to generate some stats written
     [ ] Release process to auto-deploy Python app to Artificatory
