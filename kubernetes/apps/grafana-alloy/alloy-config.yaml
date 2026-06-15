@@ -43,7 +43,7 @@ data:
 
     prometheus.remote_write "gitopsrepo" {
       endpoint {
-        url = "http://192.168.1.187:9009/loki/api/v1/push"
+        url = "http://192.168.1.187:9009/api/v1/push"
       }
     }
 
