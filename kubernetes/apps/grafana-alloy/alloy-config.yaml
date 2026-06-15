@@ -18,9 +18,18 @@ data:
       }]
     }
 
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }    
+
     loki.source.file "system" {
       targets    = local.file_match.system.targets
       forward_to      = [loki.write.default.receiver]
+    }
+
+    loki.source.kubernetes "pods" {
+      targets = discovery.kubernetes.pods.targets
+      forward_to [loki.write.default.receiver]
     }
 
     loki.write "default" {
