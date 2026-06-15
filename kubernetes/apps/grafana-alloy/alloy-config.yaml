@@ -37,7 +37,7 @@ data:
 
     prometheus.scrape "gitopsreposcrape" {
       targets = prometheus.exporter.github.gitopsrepo.targets
-      forward_to [prometheus.remote_write.gitopsrepo.receiver]
+      forward_to = [prometheus.remote_write.gitopsrepo.receiver]
 
     }
 
@@ -47,4 +47,3 @@ data:
       }
     }
 
-    
