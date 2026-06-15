@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - alloy-config.yaml
+  - sealed-github-api-token.yaml
   # NOTE: Put this last when all dependencies are set
   - helmrelease.yaml
