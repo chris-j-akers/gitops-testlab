@@ -35,3 +35,16 @@ data:
       repositories = ["chris-j-akers/gitops-testlab"]
     }
 
+    prometheus.scrape "gitopsreposcrape" {
+      targets = prometheus.exporter.github.gitopsrepo.targets
+      forward_to [prometheus.remote_write.gitopsrepo.receiver]
+
+    }
+
+    prometheus.remote_write "gitopsrepo" {
+      endpoint {
+        url = "http://192.168.1.187:9009/loki/api/v1/push"
+      }
+    }
+
+    
