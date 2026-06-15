@@ -18,6 +18,12 @@ spec:
       configMap:
         create: false
         name: grafana-alloy-config
+      extraEnv:
+        - name: GITHUB_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-api-token
+              key: gitHubAPIToken
     controller:
       tolerations:
         - key: node-role.kubernetes.io/control-plane

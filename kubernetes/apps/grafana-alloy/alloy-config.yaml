@@ -29,3 +29,9 @@ data:
       }
       external_labels = {}
     }  
+
+    prometheus.exporter.github "gitopsrepo" {
+      api_token = env("GITHUB_API_TOKEN")
+      repositories = ["chris-j-akers/gitops-testlab"]
+    }
+

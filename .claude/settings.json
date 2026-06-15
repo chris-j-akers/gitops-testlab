@@ -109,7 +109,14 @@
       "Read(//etc/apt/keyrings/**)",
       "Read(//etc/apt/sources.list.d/**)",
       "Bash(dpkg -l)",
-      "WebFetch(domain:docs.docker.com)"
+      "WebFetch(domain:docs.docker.com)",
+      "Bash(getent hosts *)",
+      "Bash(ping -c1 -W1 cakers-cp-1.lab.local)",
+      "Bash(docker compose *)",
+      "Bash(curl -s 'http://localhost:3100/loki/api/v1/labels')",
+      "Bash(curl -s 'http://localhost:3100/loki/api/v1/query_range?query={job=\"varlogs\"}&limit=20&start=1749844800000000000&end=1749931200000000000')",
+      "Bash(curl -s 'http://localhost:3100/loki/api/v1/label/job/values')",
+      "Bash(curl -s 'http://localhost:3100/loki/api/v1/label/filename/values')"
     ]
   }
 }

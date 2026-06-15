@@ -1,0 +1,12 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: github-api-token
+  namespace: grafana-alloy
+spec:
+  encryptedData:
+    gitHubAPIToken: AgBqLbNJNatocRLFNaJuqDoIMwC5bB/sAIVDfhzvTPFO96qTX4k/06GcVcEgZE1XFYsDaDH5Dd+El3VS3OV/aU/SKi1Wmu9jgJpAwbL29OcoDKws06PIrw9G1srDuPjML8bJgROtuaTCQEfqiGOFcVPJrlFPKxEnOVUL0fSyPXjhSBf14kSIYfmCf+X4K4FeBTJVq9qeT3IAtUfC0KBAJSsEWW2hwajnpw9RLfzpfiyREKqqdtjMC56423o1/Hy15cjEhSSiuZhu8aX43eDnJtBvgoib7H1gx9X57t4zkudXWJZSMLb53YmtWWO4256csRg0vUYdWUuwCe9H+kjkNVSR0LqIfKfAEwPGG/WS9RPLYyUoGsUV7AswER0kFCoRXn+rlU9aDsRIOMs40fS+rbbYLI1OjPPXtHR9o4aWekrBpgY8TYyjMcPlAqDqjOGOhMHfAK60oDp4P86z+NAkl8+zH4bgHJl9XiM+TK0bHRjesonbqFIoZw9ymCpJlTCZj+90Um1HtwU4yGbOChJAB9vHSdLqOqItECgzZxYorjGcXh0Q1QRUCTRE08GQMwMr+K8N1mO/bKmZFkkkSJo+OKy1wST0ZByKf70RByuArSq1dLBjZM+N1bNMF3CaM/qDFCNHVUrzkRslfGtfOQnVYgT0Do/ONoRsMV8xkZ/T3wj5G2IIBF6/xkazRgMo7G95/+w/vhqjfrqpjmuaQqviXDtfQpA4GdgVs8s/cwMX1UVMl9BxbDeQD53+IlB07QJs4pq8M7vLuvx23Za9ZvHRVd30pZ7y2KKD6L5Alwaxpze0PJtmZnmsrCfFjT4Er30=
+  template:
+    metadata:
+      name: github-api-token
+      namespace: grafana-alloy
