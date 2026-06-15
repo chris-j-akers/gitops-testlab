@@ -25,5 +25,7 @@
     [ ] Release process to auto-deploy Python app to Artificatory
     [ ] Adjust flux to auto-deploy specific versions in chart
 [ ] Alert manager set-up and forwarding alert (to email)
-[ ] Beyler configured in cluster
+[ ] Replace Flannel with Cilium
+[ ] Beyler configured in cluster (might clash with Cilium?)
+
 ```
