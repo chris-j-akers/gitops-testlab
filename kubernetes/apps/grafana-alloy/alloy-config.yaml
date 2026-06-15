@@ -36,7 +36,9 @@ data:
       endpoint {
         url = "http://192.168.1.187:3100/loki/api/v1/push"
       }
-      external_labels = {}
+      
+      external_labels = {
+        cluster="gitopstestlab"}
     }  
 
     prometheus.exporter.github "gitopsrepo" {
