@@ -1,0 +1,24 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: mystory
+  namespace: mystory
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./charts/mystory
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  values:
+    replicaCount: 1
+    image:
+      repository: cakes1978/mystory
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+    service:
+      type: LoadBalancer
+      port: 80
+    resources: {}
