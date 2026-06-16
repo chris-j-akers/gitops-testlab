@@ -22,7 +22,8 @@
     [X] Prom metrics collect and sending to Mimir
 [X] Artifactory deployed
 [X] Get one of my apps on Github to auto-deploy to Docker hub (mystory)
-[ ] Add Helm chart to deploy above app to cluster
+[X] Add Helm chart to deploy above app to cluster
+    [X] Create Helm chart for mystory
 [ ] Python app to generate some stats written
     [ ] Release process to auto-deploy Python app to Artificatory
     [ ] Adjust flux to auto-deploy specific versions in chart
