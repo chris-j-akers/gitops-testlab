@@ -30,5 +30,5 @@
 [ ] Alert manager set-up and forwarding alert (to email)
 [ ] Replace Flannel with Cilium
 [ ] Beyler configured in cluster (might clash with Cilium?)
-
+[ ] Migrate all to Kapitan?
 ```
