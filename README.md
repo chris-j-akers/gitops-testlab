@@ -46,9 +46,10 @@ Any keys or secrets in the commit history are now out of date (This repo used to
 [X] Get one of my apps on Github to auto-deploy to Docker hub (mystory)
 [X] Add Helm chart to deploy mystory app to cluster
     [X] Create Helm chart for mystory
-    [ ] Upload mystory helm chart into artifcatory
-    [ ] Register my artifactory repository with flux
-    [ ] Adjust mystory app to use helm chart from Artifactory in cluster.
+    [X] Upload mystory helm chart into artifactory
+    ~~[ ] Register my artifactory repository with flux~~
+    ~~[ ] Adjust mystory app to use helm chart from Artifactory in cluster.~~
+    ** The OSS version of artifactory has various restrictions getting in the way (no OCI push/pull etc) so will try and install Harbor **
 [ ] Python app to generate some stats written
     [ ] Release process to auto-deploy Python app to Artificatory
     [ ] Adjust flux to auto-deploy specific versions in chart
@@ -56,5 +57,6 @@ Any keys or secrets in the commit history are now out of date (This repo used to
 [ ] Replace Flannel with Cilium
 [ ] Beyler configured in cluster (might clash with Cilium?)
 [ ] Migrate all to Kapitan?
-[ ] Looks like Artifactory OSS doesn't support a load of stuff I need. Install Harbour instead.
+[ ] Install and configure Harbor for chart repo
+
 ```
