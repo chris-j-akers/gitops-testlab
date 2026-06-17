@@ -56,4 +56,5 @@ Any keys or secrets in the commit history are now out of date (This repo used to
 [ ] Replace Flannel with Cilium
 [ ] Beyler configured in cluster (might clash with Cilium?)
 [ ] Migrate all to Kapitan?
+[ ] Looks like Artifactory OSS doesn't support a load of stuff I need. Install Harbour instead.
 ```
