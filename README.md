@@ -58,5 +58,6 @@ Any keys or secrets in the commit history are now out of date (This repo used to
 [ ] Beyler configured in cluster (might clash with Cilium?)
 [ ] Migrate all to Kapitan?
 [ ] Install and configure Harbor for chart repo
+    - [docs](https://goharbor.io/docs/1.10/install-config/harbor-ha-helm/)
 
 ```
