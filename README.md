@@ -1,5 +1,27 @@
 # Gitops Test Lab
 
+This is a home lab continuoulsy under iteration to practice K8s deployments and general reliability.
+
+The lab consists of a four-node K8s cluster built using Virtual Box and Rocky Linux. One control plane and three worker nodes.
+
+Apps that need persistent storage will be pinned to nodes as there is no external storage available.
+
+The LGTM stack (source in `./lgtm`) sits outside the cluster deliberately and will be run from the host.
+
+Claude was used to generate objects such as initial Helm releases.
+
+Any keys or secrets in the commit history are now out of date (This repo used to be private). Sealed Secrets is used to store current secrets.
+
+## Deployed so Far
+
+- K8s
+    - Flannel
+    - Metallb
+- Grafana Alloy
+- Bitnami Sealed Secrets
+- Flux
+- Artifactory (OSS version with PostGres)
+
 
 ## TODO
 
@@ -22,8 +44,11 @@
     [X] Prom metrics collect and sending to Mimir
 [X] Artifactory deployed
 [X] Get one of my apps on Github to auto-deploy to Docker hub (mystory)
-[X] Add Helm chart to deploy above app to cluster
+[X] Add Helm chart to deploy mystory app to cluster
     [X] Create Helm chart for mystory
+    [ ] Upload mystory helm chart into artifcatory
+    [ ] Register my artifactory repository with flux
+    [ ] Adjust mystory app to use helm chart from Artifactory in cluster.
 [ ] Python app to generate some stats written
     [ ] Release process to auto-deploy Python app to Artificatory
     [ ] Adjust flux to auto-deploy specific versions in chart
