@@ -7,16 +7,17 @@ spec:
   interval: 5m
   chart:
     spec:
-      chart: ./charts/mystory
+      chart: mystory
+      version: "0.1.0"
       sourceRef:
-        kind: GitRepository
-        name: flux-system
+        kind: HelmRepository
+        name: artifactory-mystory
         namespace: flux-system
   values:
     replicaCount: 1
     image:
-      repository: cakes1978/mystory
-      tag: "1.0.0"
+      repository: artifactory-mystory
+      tag: "0.1.0"
       pullPolicy: IfNotPresent
     service:
       type: LoadBalancer

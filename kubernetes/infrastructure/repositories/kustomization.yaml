@@ -5,3 +5,4 @@ resources:
   - metallb.yaml
   - grafana-alloy.yaml
   - sealed-secrets.yaml
+  - artifactory.yml

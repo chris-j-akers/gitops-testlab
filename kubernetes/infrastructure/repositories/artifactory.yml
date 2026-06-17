@@ -1,0 +1,10 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: artifactory-mystory
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: http://artifactory-oss-artifactory-nginx.artifactory.svc.cluster.local/artifactory/mystory-virtual
+  secretRef:
+    name: artifactory-helm-creds
