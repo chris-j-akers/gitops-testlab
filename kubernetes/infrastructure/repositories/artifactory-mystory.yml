@@ -7,4 +7,5 @@ spec:
   interval: 5m
   url: http://artifactory-oss-artifactory-nginx.artifactory.svc.cluster.local/artifactory/mystory-virtual
   secretRef:
-    name: artifactory-helm-creds
+    name: artifactory-mystory-credentials
+
