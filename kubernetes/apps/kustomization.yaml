@@ -5,5 +5,5 @@ resources:
   # I got it up and running. I won't remove the source from this repo because useful stuff.
   # - artifactory/
   - grafana-alloy/
-  # - harbor/
+  - harbor/
   - mystory/
