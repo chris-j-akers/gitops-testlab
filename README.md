@@ -57,9 +57,9 @@ Any keys or secrets in the commit history are now out of date (This repo used to
 [ ] Replace Flannel with Cilium
 [ ] Beyler configured in cluster (might clash with Cilium?)
 [ ] Migrate all to Kapitan?
-[ ] Install and configure Harbor for chart repo
+[X] Install and configure Harbor for chart repo
     - [docs](https://goharbor.io/docs/1.10/install-config/harbor-ha-helm/)
-    [ ] A lot of PVCs, so set affinity accordingly on PV and Containers
+    [X] A lot of PVCs, so set affinity accordingly on PV and Containers
     [X] Remove artifactory from flux Kustomization (and, therefore, cluster)
     [X] Delete artifactory data
 
