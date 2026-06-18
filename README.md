@@ -20,7 +20,7 @@ Any keys or secrets in the commit history are now out of date (This repo used to
 - Grafana Alloy
 - Bitnami Sealed Secrets
 - Flux
-- Artifactory (OSS version with PostGres)
+- ~~Artifactory (OSS version with PostGres)~~
 
 
 ## TODO
