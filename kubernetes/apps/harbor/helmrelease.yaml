@@ -26,23 +26,17 @@ spec:
       tls:
         enabled: false
     registry:
-      affinity:
-        nodeSelector:
+      nodeSelector:
         kubernetes.io/hostname: cakers-worker-3.lab.local
     trivy:
-      affinity:
-        nodeSelector:
+      nodeSelector:
         kubernetes.io/hostname: cakers-worker-1.lab.local
     database:
-      affinity:
-        nodeSelector:
-        kubernetes.io/hostname: cakers-worker-2.lab.local    
+      nodeSelector:
+        kubernetes.io/hostname: cakers-worker-2.lab.local
     redis:
-      affinity:
-        nodeSelector:
+      nodeSelector:
         kubernetes.io/hostname: cakers-worker-1.lab.local
     jobservice:
-      affinity:
-        nodeSelector:
+      nodeSelector:
         kubernetes.io/hostname: cakers-worker-3.lab.local
-
