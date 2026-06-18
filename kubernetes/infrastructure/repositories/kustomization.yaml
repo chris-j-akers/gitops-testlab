@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   # Not curently using artifactory, OSS version is too limited. Switched to Harbor
   # - jfrog.yaml
+  - harbor.yaml
   - metallb.yaml
   - grafana-alloy.yaml
   - sealed-secrets.yaml
