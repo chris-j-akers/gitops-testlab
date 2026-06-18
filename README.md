@@ -59,6 +59,7 @@ Any keys or secrets in the commit history are now out of date (This repo used to
 [ ] Migrate all to Kapitan?
 [ ] Install and configure Harbor for chart repo
     - [docs](https://goharbor.io/docs/1.10/install-config/harbor-ha-helm/)
-    [ ] Remove artifactory
+    [ ] Remove artifactory from flux Kustomization (and, therefore, cluster)
+    [ ] Delete artifactory data
 
 ```
