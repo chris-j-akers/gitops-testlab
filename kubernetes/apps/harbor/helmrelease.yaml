@@ -22,5 +22,7 @@ spec:
     expose:
       type: loadBalancer
       name: harbor
+      tls:
+        enabled: false
 
 
