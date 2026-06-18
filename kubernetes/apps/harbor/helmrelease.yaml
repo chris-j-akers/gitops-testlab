@@ -20,6 +20,7 @@ spec:
         name: harbor
         namespace: flux-system
   values:
+    externalURL: http://192.168.56.200
     expose:
       type: loadBalancer
       name: harbor
