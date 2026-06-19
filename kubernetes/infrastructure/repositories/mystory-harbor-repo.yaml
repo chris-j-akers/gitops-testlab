@@ -1,0 +1,10 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: mystory-harbor
+  namespace: flux-system
+spec:
+  type: "oci"                # Tells Flux this is an OCI registry (like Harbor v2)
+  insecure: true             # Equates to helm's --plain-http flag for HTTP-only connections
+  interval: 5m
+  url: oci://harbor.lab.local/mystory

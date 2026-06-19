@@ -6,4 +6,5 @@ resources:
   - harbor.yaml
   - metallb.yaml
   - grafana-alloy.yaml
+  - mystory-harbor-repo.yaml
   - sealed-secrets.yaml
